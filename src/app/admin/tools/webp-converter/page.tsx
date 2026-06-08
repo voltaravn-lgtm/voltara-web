@@ -1,6 +1,5 @@
 "use client"
 import React, { useEffect, useRef, useState } from "react"
-import AdminAuthGate from '@/components/AdminAuthGate';
 type ResizeOption = "original" | 800 | 1200 | 1600 | 2000
 
 interface ImageItem {
