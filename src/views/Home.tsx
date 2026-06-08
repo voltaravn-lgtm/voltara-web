@@ -85,9 +85,10 @@ export default function Home() {
     { id: "ac-quy-lithium", name: "Ắc quy lithium" },
   ];
 
+  const visibleProducts = products.filter(product => !product.hidden);
   const filteredProducts = selectedCategory === "all"
-    ? products.slice(0, 4)
-    : products.filter(p => p.category === selectedCategory).slice(0, 4);
+    ? visibleProducts.slice(0, 4)
+    : visibleProducts.filter(p => p.category === selectedCategory).slice(0, 4);
 
   const handleQuickWarrantCheck = (e: React.FormEvent) => {
     e.preventDefault();

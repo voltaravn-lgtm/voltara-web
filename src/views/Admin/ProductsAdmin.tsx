@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
-import { Battery, Plus, Edit, Trash2, X, Save, Copy, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon, Link as LinkIcon, List, Eye, Upload, Loader2 } from "lucide-react";
+import { Battery, Plus, Edit, Trash2, X, Save, Copy, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon, Link as LinkIcon, List, Eye, Upload, Loader2, Search, LayoutGrid, Rows3, EyeOff } from "lucide-react";
 
 // Helper to render markdown and layout codes inside product descriptions
 export function formatDescriptionToHtml(desc: string | undefined): string {
@@ -47,6 +47,9 @@ export default function ProductsAdmin() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isToolbarPreviewMode, setIsToolbarPreviewMode] = useState(false);
   const [uploadingImageTarget, setUploadingImageTarget] = useState<string | null>(null);
+  const [adminViewMode, setAdminViewMode] = useState<"grid" | "list">("grid");
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [productVisibilityFilter, setProductVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   
   const [productForm, setProductForm] = useState<Partial<Product>>({
     id: "",
@@ -60,6 +63,7 @@ export default function ProductsAdmin() {
     description: "",
     category: "pin-may-cong-cu",
     price: "1.200.000đ",
+    hidden: false,
     specs: {}
   });
 
@@ -69,7 +73,7 @@ export default function ProductsAdmin() {
   const handleOpenProductModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setProductForm({ ...product, images: product.images || [] });
+      setProductForm({ ...product, images: product.images || [], hidden: product.hidden ?? false });
     } else {
       setEditingProduct(null);
       setProductForm({
@@ -85,6 +89,7 @@ export default function ProductsAdmin() {
         description: "Mô tả sản phẩm bình ắc quy Lithium Voltara chất lượng bộc phát dòng dòng xả lớn.",
         category: "ac-quy-lithium",
         price: "2.500.000₫",
+        hidden: false,
         specs: {
           "Điện thế danh định": "12.8V",
           "Dung lượng danh định": "50Ah",
@@ -103,7 +108,7 @@ export default function ProductsAdmin() {
       return;
     }
 
-    const currentForm = productForm as Product;
+    const currentForm = { ...productForm, hidden: productForm.hidden ?? false } as Product;
 
     if (editingProduct) {
       updateProduct(currentForm);
@@ -136,6 +141,32 @@ export default function ProductsAdmin() {
     setIsToolbarPreviewMode(false);
     setIsProductModalOpen(true);
   };
+
+  const handleToggleProductVisibility = (prod: Product) => {
+    updateProduct({ ...prod, hidden: !prod.hidden });
+    showToast(prod.hidden ? "Đã bật hiển thị sản phẩm." : "Đã ẩn sản phẩm khỏi trang công khai.", "info");
+  };
+
+  const normalizedSearchQuery = productSearchQuery.trim().toLowerCase();
+  const filteredAdminProducts = products
+    .filter((prod) => {
+      const matchesSearch =
+        !normalizedSearchQuery ||
+        prod.name.toLowerCase().includes(normalizedSearchQuery) ||
+        prod.id.toLowerCase().includes(normalizedSearchQuery) ||
+        prod.category.toLowerCase().includes(normalizedSearchQuery) ||
+        prod.brand.toLowerCase().includes(normalizedSearchQuery);
+      const matchesVisibility =
+        productVisibilityFilter === "all" ||
+        (productVisibilityFilter === "hidden" ? Boolean(prod.hidden) : !prod.hidden);
+
+      return matchesSearch && matchesVisibility;
+    })
+    .sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime || b.id.localeCompare(a.id);
+    });
 
   const insertFormatting = (type: "bold" | "italic" | "align-left" | "align-center" | "align-right" | "image" | "bullet" | "heading" | "link") => {
     const textarea = document.getElementById("product-description-textarea") as HTMLTextAreaElement;
@@ -288,61 +319,145 @@ export default function ProductsAdmin() {
         </button>
       </div>
 
-      {/* Catalog lists */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-        {products.map((prod) => (
-          <div key={prod.id} className="bg-black/80 border border-[#1A1A1A] hover:border-gold-dark/40 p-4 transition-all duration-350 flex flex-col justify-between">
-            <div className="flex items-start gap-4">
-              <div className="w-16 h-16 bg-[#111] border border-[#222] p-1 flex items-center justify-center shrink-0">
-                <img 
-                  src={prod.image} 
-                  alt={prod.name} 
-                  className="max-h-full max-w-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono text-gold-light tracking-wide bg-gold-dark/10 p-0.5">{prod.voltage} / {prod.capacity}</span>
-                  <span className="text-[9px] text-gray-500 font-mono">ID: {prod.id}</span>
-                </div>
-                <h3 className="text-xs font-display font-bold text-white uppercase line-clamp-1 leading-snug">{prod.name}</h3>
-                <p className="text-[10px] text-gray-500 font-bold">{prod.price || "Liên hệ"}</p>
-                <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{prod.description}</p>
-              </div>
+      <div className="border border-white/5 bg-black/40 p-4 space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+          <div className="lg:col-span-5 relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
+            <input
+              type="search"
+              value={productSearchQuery}
+              onChange={(e) => setProductSearchQuery(e.target.value)}
+              placeholder="Tìm theo tên, ID, thương hiệu hoặc danh mục..."
+              className="w-full bg-black border border-[#1A1A1A] text-[#ECECEC] pl-9 pr-3 py-2.5 text-xs focus:outline-none focus:border-gold-light"
+            />
+          </div>
+
+          <select
+            value={productVisibilityFilter}
+            onChange={(e) => setProductVisibilityFilter(e.target.value as "all" | "visible" | "hidden")}
+            className="lg:col-span-3 bg-black border border-[#1A1A1A] text-[#ECECEC] px-3 py-2.5 text-xs focus:outline-none focus:border-gold-light font-display font-bold uppercase"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="visible">Đang hiển thị</option>
+            <option value="hidden">Đang ẩn</option>
+          </select>
+
+          <div className="lg:col-span-4 flex items-stretch justify-between gap-2">
+            <div className="flex border border-[#1A1A1A] bg-black">
+              <button
+                type="button"
+                onClick={() => setAdminViewMode("grid")}
+                className={`w-10 flex items-center justify-center transition-colors ${adminViewMode === "grid" ? "bg-gold-dark text-black" : "text-gray-400 hover:text-white"}`}
+                title="Dạng thẻ"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewMode("list")}
+                className={`w-10 flex items-center justify-center transition-colors ${adminViewMode === "list" ? "bg-gold-dark text-black" : "text-gray-400 hover:text-white"}`}
+                title="Dạng danh sách"
+              >
+                <Rows3 className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-[#1A1A1A] flex items-center justify-between">
-              <span className="text-[9px] font-mono text-gray-500 bg-white/5 px-2 py-0.5 font-bold uppercase">{prod.category}</span>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleCopyProduct(prod)}
-                  className="bg-[#111] hover:bg-[#222] border border-white/5 text-[10px] font-display uppercase tracking-wider text-[#A3E635] px-2.5 py-1 flex items-center gap-1 transition-all cursor-pointer"
-                  title="Nhân bản sản phẩm"
-                >
-                  <Copy className="w-3 h-3 text-[#A3E635]" />
-                  Nhân bản
-                </button>
-                <button
-                  onClick={() => handleOpenProductModal(prod)}
-                  className="bg-[#111] hover:bg-[#222] border border-white/5 text-[10px] font-display uppercase tracking-wider text-white px-2.5 py-1 flex items-center gap-1 transition-all cursor-pointer"
-                >
-                  <Edit className="w-3 h-3 text-[#F5C45A]" />
-                  Sửa
-                </button>
-                <button
-                  onClick={() => handleDeleteProductPrompt(prod.id, prod.name)}
-                  className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[10px] px-2 py-1 transition-all cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
+            <div className="flex items-center px-3 border border-[#1A1A1A] bg-black text-[10px] text-gray-500 font-mono uppercase">
+              {filteredAdminProducts.length}/{products.length} sản phẩm
             </div>
           </div>
-        ))}
+        </div>
       </div>
+
+      {/* Catalog lists */}
+      {filteredAdminProducts.length === 0 ? (
+        <div className="border border-white/5 bg-black/50 py-14 text-center">
+          <Search className="w-9 h-9 text-gray-600 mx-auto mb-3" />
+          <p className="text-xs text-gray-400 font-display font-bold uppercase tracking-widest">Không tìm thấy sản phẩm phù hợp</p>
+        </div>
+      ) : (
+        <div className={adminViewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6" : "space-y-2 mt-6"}>
+          {filteredAdminProducts.map((prod) => (
+            <div
+              key={prod.id}
+              className={`bg-black/80 border transition-all duration-300 ${
+                prod.hidden
+                  ? "border-gray-800 opacity-70 hover:opacity-100"
+                  : "border-[#1A1A1A] hover:border-gold-dark/40"
+              } ${adminViewMode === "grid" ? "p-4 flex flex-col justify-between" : "p-3 flex flex-col md:flex-row md:items-center gap-3"}`}
+            >
+              <div className={`flex items-start gap-4 ${adminViewMode === "list" ? "flex-1 min-w-0" : ""}`}>
+                <div className={`${adminViewMode === "grid" ? "w-16 h-16" : "w-12 h-12"} bg-[#111] border border-[#222] p-1 flex items-center justify-center shrink-0`}>
+                  <img
+                    src={prod.image}
+                    alt={prod.name}
+                    className="max-h-full max-w-full object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className={`space-y-1 min-w-0 ${adminViewMode === "list" ? "flex-1" : ""}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] font-mono text-gold-light tracking-wide bg-gold-dark/10 p-0.5">{prod.voltage} / {prod.capacity}</span>
+                    <span className="text-[9px] text-gray-500 font-mono">ID: {prod.id}</span>
+                    <span className={`text-[9px] font-display font-bold uppercase px-2 py-0.5 border ${prod.hidden ? "text-gray-400 border-gray-700 bg-gray-900/60" : "text-emerald-400 border-emerald-500/20 bg-emerald-500/10"}`}>
+                      {prod.hidden ? "Đang ẩn" : "Đang hiện"}
+                    </span>
+                  </div>
+                  <h3 className="text-xs font-display font-bold text-white uppercase line-clamp-1 leading-snug">{prod.name}</h3>
+                  <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <span className="text-gray-500 font-bold">{prod.price || "Liên hệ"}</span>
+                    <span className="text-gray-600">/</span>
+                    <span className="text-gray-500 font-mono uppercase">{prod.category}</span>
+                  </div>
+                  {adminViewMode === "grid" && (
+                    <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{prod.description}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className={`${adminViewMode === "grid" ? "mt-4 pt-3 border-t border-[#1A1A1A] flex items-center justify-between" : "flex items-center justify-end gap-2 shrink-0"}`}>
+                {adminViewMode === "grid" && (
+                  <span className="text-[9px] font-mono text-gray-500 bg-white/5 px-2 py-0.5 font-bold uppercase">{prod.category}</span>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleProductVisibility(prod)}
+                    className={`bg-[#111] hover:bg-[#222] border border-white/5 text-[10px] font-display uppercase tracking-wider px-2.5 py-1 flex items-center gap-1 transition-all cursor-pointer ${prod.hidden ? "text-emerald-400" : "text-gray-400"}`}
+                    title={prod.hidden ? "Bật hiển thị sản phẩm" : "Ẩn sản phẩm khỏi trang công khai"}
+                  >
+                    {prod.hidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    {prod.hidden ? "Hiện" : "Ẩn"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyProduct(prod)}
+                    className="bg-[#111] hover:bg-[#222] border border-white/5 text-[10px] font-display uppercase tracking-wider text-[#A3E635] px-2.5 py-1 flex items-center gap-1 transition-all cursor-pointer"
+                    title="Nhân bản sản phẩm"
+                  >
+                    <Copy className="w-3 h-3 text-[#A3E635]" />
+                    Nhân bản
+                  </button>
+                  <button
+                    onClick={() => handleOpenProductModal(prod)}
+                    className="bg-[#111] hover:bg-[#222] border border-white/5 text-[10px] font-display uppercase tracking-wider text-white px-2.5 py-1 flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Edit className="w-3 h-3 text-[#F5C45A]" />
+                    Sửa
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProductPrompt(prod.id, prod.name)}
+                    className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[10px] px-2 py-1 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* POPUP MODAL */}
       {isProductModalOpen && (
@@ -435,6 +550,23 @@ export default function ProductsAdmin() {
                     <option value="phu-kien-linh-kien">PHỤ KIỆN & LINH KIỆN</option>
                   </select>
                 </div>
+
+                <label className="col-span-1 sm:col-span-2 flex items-center justify-between gap-4 border border-[#1A1A1A] bg-black/70 px-4 py-3 cursor-pointer">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-display font-bold uppercase tracking-widest text-[#ECECEC]">
+                      Ẩn sản phẩm khỏi website công khai
+                    </span>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      Sản phẩm vẫn còn trong quản trị để sửa lại, nhưng không hiện ở trang chủ và danh sách sản phẩm.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(productForm.hidden)}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, hidden: e.target.checked }))}
+                    className="w-4 h-4 accent-gold-dark"
+                  />
+                </label>
 
                 <div className="col-span-1 sm:col-span-2 space-y-1">
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A]">Đường dẫn ảnh Đại diện chính</label>

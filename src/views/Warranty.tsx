@@ -42,21 +42,6 @@ export default function Warranty() {
           status: found.status,
           specNotes: found.specNotes
         });
-      } else if (upperSerial.startsWith("VOL") || upperSerial.includes("VOLTARA")) {
-        setResult({
-          isValid: true,
-          serial: upperSerial,
-          productName: upperSerial.includes("20V") 
-            ? "PIN VOLTARA 20V 5.0Ah (Cho máy Makita)" 
-            : "Bộ Pin Xe Điện Lithium 48V 20Ah",
-          customerName: "Nguyễn Văn Hùng",
-          customerPhone: phone.trim() || "098*****25",
-          activatedDate: "20/05/2026",
-          termMonths: upperSerial.includes("20V") ? 12 : 18,
-          expiryDate: upperSerial.includes("20V") ? "20/05/2027" : "20/11/2027",
-          status: "HỢP LỆ (Đang trong thời hạn bảo hành)",
-          specNotes: "Lõi cell hoạt động an toàn SOH 98%, chưa phát hiện lịch sử xả kiệt quá áp."
-        });
       } else {
         setResult({
           isValid: false,
@@ -330,6 +315,14 @@ export default function Warranty() {
             <p className="text-[11px] text-gray-500 mb-6 leading-relaxed">
               Nhập mã định danh Serial/SN số khắc la-ze sau vỏ pin để kiểm tra trạng thái kích hoạt chính quy.
             </p>
+
+            <Link
+              to="/kich-hoat-bao-hanh"
+              className="mb-5 inline-flex items-center justify-center gap-2 border border-gold-dark/30 px-4 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light hover:border-gold-light hover:text-white"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              Kích hoạt bảo hành điện tử
+            </Link>
 
             <form onSubmit={handleLookup} className="space-y-4">
               <div>

@@ -15,7 +15,7 @@ interface ProductDetailClientProps {
 export default function ProductDetailClient({ product, relatedProducts }: ProductDetailClientProps) {
   const { products } = useApp();
   const currentProduct = products.find((item) => item.id === product.id) || product;
-  const productSource = products.length > 0 ? products : [product, ...relatedProducts];
+  const productSource = (products.length > 0 ? products : [product, ...relatedProducts]).filter(item => !item.hidden);
   const sameCategoryProducts = productSource.filter(
     (item) => item.category === currentProduct.category && item.id !== currentProduct.id,
   );

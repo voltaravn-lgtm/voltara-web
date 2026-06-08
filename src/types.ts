@@ -17,6 +17,9 @@ export interface Product {
   description: string;
   category: string;
   price?: string;
+  hidden?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   specs: {
     [key: string]: string;
   };
@@ -173,11 +176,17 @@ export interface WarrantyRecord {
   productName: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
+  dealerName?: string;
+  purchaseDate?: string;
   activatedDate: string;
   termMonths: number;
   expiryDate: string;
   status: string;
   specNotes: string;
+  activationSource?: "admin" | "customer";
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ToastMessage {

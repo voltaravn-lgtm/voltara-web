@@ -8,6 +8,10 @@ import { useApp } from "../../context/AppContext";
 import { WarrantyRecord } from "../../types";
 import { Plus, Trash2, Edit, Save, X, Search, ShieldCheck, Heart, Settings, BatteryCharging } from "lucide-react";
 
+function warrantyIdFromSerial(serial: string) {
+  return `warranty-${serial.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}`;
+}
+
 export default function WarrantyAdmin() {
   const { warranties, addWarranty, updateWarranty, deleteWarranty, showToast } = useApp();
 
@@ -106,7 +110,8 @@ export default function WarrantyAdmin() {
       }
 
       addWarranty({
-        id: "w-rec-" + Date.now(),
+        id: warrantyIdFromSerial(payload.serial),
+        activationSource: "admin",
         ...payload
       });
       showToast("Cấp chứng thư bảo hành điện tử thành công!", "success");

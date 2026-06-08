@@ -44,6 +44,39 @@ export interface NewsletterSubscriber {
   date: string;
 }
 
+export interface SiteContactSettings {
+  companyName: string;
+  address: string;
+  hotline: string;
+  email: string;
+  workingHours: string;
+  googleMapEmbedUrl: string;
+  facebookUrl: string;
+  youtubeUrl: string;
+  zaloUrl: string;
+  tiktokUrl: string;
+}
+
+function sortProductsNewestFirst(items: Product[]) {
+  return [...items].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+    if (aTime !== bTime) return bTime - aTime;
+    return String(b.id).localeCompare(String(a.id), "vi");
+  });
+}
+
+function sortWarrantiesNewestFirst(items: WarrantyRecord[]) {
+  return [...items].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+    if (aTime !== bTime) return bTime - aTime;
+    return String(b.id).localeCompare(String(a.id), "vi");
+  });
+}
+
 interface AppContextType {
   menuItems: MenuItem[];
   setMenuItems: React.Dispatch<React.SetStateAction<MenuItem[]>>;
@@ -123,6 +156,8 @@ interface AppContextType {
   newsletterSubscribers: NewsletterSubscriber[];
   addNewsletterSubscriber: (email: string) => Promise<void>;
   deleteNewsletterSubscriber: (email: string) => Promise<void>;
+  contactSettings: SiteContactSettings;
+  updateContactSettings: (settings: SiteContactSettings) => Promise<void>;
 
   // Custom Toast Notification System
   toasts: ToastMessage[];
@@ -172,6 +207,19 @@ const defaultHeroSettings: HeroSettings = {
       useLogoImage: false
     }
   ]
+};
+
+const defaultContactSettings: SiteContactSettings = {
+  companyName: "Voltara Technology",
+  address: "123 Đường Năng Lượng, KCN Hòa Phú, H. Long Hồ, Vĩnh Long",
+  hotline: "1900 1234",
+  email: "info@voltara.vn",
+  workingHours: "8h00 - 17h30",
+  googleMapEmbedUrl: "",
+  facebookUrl: "#facebook",
+  youtubeUrl: "#youtube",
+  zaloUrl: "#zalo",
+  tiktokUrl: "#tiktok",
 };
 
 const defaultHomeContent: HomeContent = {
@@ -403,6 +451,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [newsletterSubscribers, setNewsletterSubscribers] = useState<NewsletterSubscriber[]>([]);
+  const [contactSettings, setContactSettings] = useState<SiteContactSettings>(() => {
+    const saved = localStorage.getItem("voltara_contact_settings");
+    return saved ? { ...defaultContactSettings, ...JSON.parse(saved) } : defaultContactSettings;
+  });
 
   // Toast status state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -432,14 +484,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isFirebaseConfigured) return undefined;
 
+    const unsubscribeContactSettings = onSnapshot(
+      doc(db, "siteSettings", "contact"),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        setContactSettings({ ...defaultContactSettings, ...(snapshot.data() as Partial<SiteContactSettings>) });
+      },
+      (error) => {
+        console.error("Could not load site contact settings from Firestore:", error);
+      }
+    );
+
     const unsubscribeProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
         if (snapshot.empty) return;
 
-        const items = snapshot.docs
-          .map((item) => item.data() as Product)
-          .sort((a, b) => String(a.name).localeCompare(String(b.name), "vi"));
+        const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
         setProducts(items);
       },
       (error) => {
@@ -447,8 +508,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
+    const unsubscribeWarranties = onSnapshot(
+      collection(db, "warranties"),
+      (snapshot) => {
+        if (snapshot.empty) {
+          setWarranties([]);
+          return;
+        }
+        setWarranties(sortWarrantiesNewestFirst(snapshot.docs.map((item) => item.data() as WarrantyRecord)));
+      },
+      (error) => {
+        console.error("Could not load warranties from Firestore:", error);
+      }
+    );
+
     return () => {
+      unsubscribeContactSettings();
       unsubscribeProducts();
+      unsubscribeWarranties();
     };
   }, []);
 
@@ -577,6 +654,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("voltara_quote_requests", JSON.stringify(quoteRequests));
   }, [quoteRequests]);
 
+  useEffect(() => {
+    localStorage.setItem("voltara_contact_settings", JSON.stringify(contactSettings));
+  }, [contactSettings]);
+
   // Administration Helpers
   const resetToDefault = () => {
     if (window.confirm("Bạn có chắc chắn muốn khôi phục toàn bộ cài đặt về mặc định của Voltara?")) {
@@ -593,17 +674,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setHeroSettings(defaultHeroSettings);
       setHomeContent(defaultHomeContent);
       setAboutContent(defaultAboutContent);
+      setContactSettings(defaultContactSettings);
       localStorage.clear();
       showToast("Đã khôi phục thành công dữ liệu hệ thống!", "success");
     }
   };
 
   const updateProduct = async (updatedProduct: Product) => {
-    setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    const nextProduct = {
+      ...updatedProduct,
+      createdAt: updatedProduct.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProducts(prev => sortProductsNewestFirst(prev.map(p => p.id === nextProduct.id ? nextProduct : p)));
 
     if (isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, "products", updatedProduct.id), updatedProduct, { merge: true });
+        await setDoc(doc(db, "products", nextProduct.id), nextProduct, { merge: true });
       } catch (error) {
         console.error("Could not update product in Firestore:", error);
         showToast("Không thể lưu sản phẩm lên Firebase.", "error");
@@ -612,18 +700,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addProduct = async (newProduct: Product) => {
+    const nextProduct = {
+      ...newProduct,
+      createdAt: newProduct.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
     setProducts(prev => {
       // Avoid raw duplicates
-      if (prev.some(p => p.id === newProduct.id)) {
+      if (prev.some(p => p.id === nextProduct.id)) {
         showToast("ID Sản phẩm đã tồn tại!", "error");
         return prev;
       }
-      return [newProduct, ...prev];
+      return sortProductsNewestFirst([nextProduct, ...prev]);
     });
 
-    if (isFirebaseConfigured && !products.some(p => p.id === newProduct.id)) {
+    if (isFirebaseConfigured && !products.some(p => p.id === nextProduct.id)) {
       try {
-        await setDoc(doc(db, "products", newProduct.id), newProduct);
+        await setDoc(doc(db, "products", nextProduct.id), nextProduct);
       } catch (error) {
         console.error("Could not add product to Firestore:", error);
         showToast("Không thể thêm sản phẩm lên Firebase.", "error");
@@ -721,13 +815,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Warranty CRUD Operations
   const addWarranty = (w: WarrantyRecord) => {
-    setWarranties(prev => [w, ...prev]);
+    const nextWarranty = {
+      ...w,
+      createdAt: w.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setWarranties(prev => sortWarrantiesNewestFirst([nextWarranty, ...prev]));
+
+    if (isFirebaseConfigured) {
+      setDoc(doc(db, "warranties", nextWarranty.id), nextWarranty).catch((error) => {
+        console.error("Could not save warranty to Firestore:", error);
+        showToast("Không lưu được bảo hành lên Firebase.", "error");
+      });
+    }
   };
   const updateWarranty = (w: WarrantyRecord) => {
-    setWarranties(prev => prev.map(item => item.id === w.id ? w : item));
+    const nextWarranty = {
+      ...w,
+      createdAt: w.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setWarranties(prev => sortWarrantiesNewestFirst(prev.map(item => item.id === nextWarranty.id ? nextWarranty : item)));
+
+    if (isFirebaseConfigured) {
+      setDoc(doc(db, "warranties", nextWarranty.id), nextWarranty, { merge: true }).catch((error) => {
+        console.error("Could not update warranty in Firestore:", error);
+        showToast("Không cập nhật được bảo hành trên Firebase.", "error");
+      });
+    }
   };
   const deleteWarranty = (id: string) => {
     setWarranties(prev => prev.filter(item => item.id !== id));
+
+    if (isFirebaseConfigured) {
+      deleteDoc(doc(db, "warranties", id)).catch((error) => {
+        console.error("Could not delete warranty from Firestore:", error);
+        showToast("Không xóa được bảo hành trên Firebase.", "error");
+      });
+    }
   };
 
   // Solutions Helper Operations
@@ -817,6 +942,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateContactSettings = async (settings: SiteContactSettings) => {
+    const nextSettings = { ...defaultContactSettings, ...settings };
+    setContactSettings(nextSettings);
+
+    if (isFirebaseConfigured) {
+      await setDoc(doc(db, "siteSettings", "contact"), nextSettings, { merge: true });
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -851,6 +985,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         newsletterSubscribers,
         addNewsletterSubscriber,
         deleteNewsletterSubscriber,
+        contactSettings,
+        updateContactSettings,
         resetToDefault,
         updateProduct,
         addProduct,

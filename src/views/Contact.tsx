@@ -12,7 +12,7 @@ import { SectionTitle, BranchCard } from "../components/Cards";
 import { useApp } from "../context/AppContext";
 
 export default function Contact() {
-  const { addSubmission } = useApp();
+  const { addSubmission, contactSettings } = useApp();
   const [searchParams] = useSearchParams();
   const prepopulatedTitle = searchParams.get("title") || "";
   const prepopulatedType = searchParams.get("type") || "";
@@ -28,6 +28,7 @@ export default function Contact() {
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const phoneHref = contactSettings.hotline.replace(/[^\d+]/g, "");
 
   // Prepopulate form fields if query params are present
   useEffect(() => {
@@ -264,7 +265,7 @@ export default function Contact() {
           <div className="lg:col-span-5 bg-[#161616]/60 border border-white/5 p-6 md:p-8 flex flex-col justify-between text-left">
             <div>
               <h3 className="text-xs font-display font-black text-white uppercase tracking-widest mb-4">
-                BAN TỔ CHỨC VOLTARA TECHNOLOGY
+                {contactSettings.companyName}
               </h3>
               
               <div className="space-y-4 text-xs text-gray-400">
@@ -272,8 +273,8 @@ export default function Contact() {
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-gold-dark shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-gray-200 block text-[10.5px] uppercase">Trung tâm Nghiên cứu R&D:</strong>
-                    <span className="leading-relaxed">Tòa nhà Voltara Labs, KCN Tân Bình, Quận Tân Phú, TP. Hồ Chí Minh</span>
+                    <strong className="text-gray-200 block text-[10.5px] uppercase">Địa chỉ liên hệ:</strong>
+                    <span className="leading-relaxed">{contactSettings.address}</span>
                   </div>
                 </div>
 
@@ -281,7 +282,7 @@ export default function Contact() {
                   <PhoneCall className="w-4 h-4 text-gold-dark shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-gray-200 block text-[10.5px] uppercase">Tổng đài Hỗ trợ sỉ:</strong>
-                    <span className="font-mono text-white text-sm font-extrabold block mt-0.5">1900 1234 (Nhánh 1)</span>
+                    <a href={`tel:${phoneHref}`} className="font-mono text-white text-sm font-extrabold block mt-0.5 hover:text-gold-light transition-colors">{contactSettings.hotline}</a>
                   </div>
                 </div>
 
@@ -289,7 +290,7 @@ export default function Contact() {
                   <Mail className="w-4 h-4 text-gold-dark shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-gray-200 block text-[10.5px] uppercase">Hộp thư điện tử liên kết:</strong>
-                    <span className="text-white block">business@voltara.vn</span>
+                    <a href={`mailto:${contactSettings.email}`} className="text-white block hover:text-gold-light transition-colors">{contactSettings.email}</a>
                   </div>
                 </div>
 
@@ -297,30 +298,37 @@ export default function Contact() {
                   <Clock className="w-4 h-4 text-gold-dark shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-gray-200 block text-[10.5px] uppercase">Giờ làm việc:</strong>
-                    <span>8:00 - 17:30 (Thứ 2 đến Thứ 7)</span>
+                    <span>{contactSettings.workingHours}</span>
                   </div>
                 </div>
 
               </div>
             </div>
 
-            {/* Simulated high-tech coordinates visual graphic vector map */}
-            <div className="mt-6 aspect-[16/8] w-full bg-[#050505] border border-white/5 p-4 flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(216,154,43,0.05)_0%,transparent_100%)]" />
-              <div className="flex items-center justify-between text-[9px] font-mono text-gray-500 uppercase select-none">
-                <span>VOLTARA-COOR-MAP</span>
-                <span className="text-gold-light animate-ping">● LIVE SATELLITE</span>
+            {contactSettings.googleMapEmbedUrl ? (
+              <iframe
+                title="Google Map Voltara"
+                src={contactSettings.googleMapEmbedUrl}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="mt-6 aspect-[16/8] w-full border border-white/10 grayscale-[25%]"
+              />
+            ) : (
+              <div className="mt-6 aspect-[16/8] w-full bg-[#050505] border border-white/5 p-4 flex flex-col justify-between relative overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(216,154,43,0.05)_0%,transparent_100%)]" />
+                <div className="flex items-center justify-between text-[9px] font-mono text-gray-500 uppercase select-none">
+                  <span>VOLTARA-COOR-MAP</span>
+                  <span className="text-gold-light animate-ping">● LIVE SATELLITE</span>
+                </div>
+                <div className="text-center font-mono font-black text-xs text-gold-light select-none">
+                  10&deg;47'21.4&quot;N 106&deg;38'24.5&quot;E
+                </div>
+                <div className="flex items-center justify-between text-[9px] text-gray-600 font-mono">
+                  <span>ALTITUDE: 14m</span>
+                  <span>STATUS: ACCURATE SECURE</span>
+                </div>
               </div>
-              
-              <div className="text-center font-mono font-black text-xs text-gold-light select-none">
-                10&deg;47'21.4&quot;N 106&deg;38'24.5&quot;E
-              </div>
-
-              <div className="flex items-center justify-between text-[9px] text-gray-600 font-mono">
-                <span>ALTITUDE: 14m</span>
-                <span>STATUS: ACCURATE SECURE</span>
-              </div>
-            </div>
+            )}
 
           </div>
 

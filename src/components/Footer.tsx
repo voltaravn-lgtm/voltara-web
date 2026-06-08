@@ -23,7 +23,7 @@ export const VietnamMapSVG: React.FC<{ className?: string }> = ({ className = "w
 };
 
 export default function Footer() {
-  const { addNewsletterSubscriber, showToast } = useApp();
+  const { addNewsletterSubscriber, contactSettings, showToast } = useApp();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
@@ -47,6 +47,7 @@ export default function Footer() {
   };
 
   const currentYear = new Date().getFullYear();
+  const phoneHref = contactSettings.hotline.replace(/[^\d+]/g, "");
 
   return (
     <footer id="main-footer" className="bg-[#050505] border-t border-gold-dark/15 pt-16 pb-24 md:pb-8 relative z-10 overflow-hidden">
@@ -66,28 +67,28 @@ export default function Footer() {
             {/* Social Network Icons with Gold Border */}
             <div className="flex items-center gap-3 mt-2">
               <a
-                href="#facebook"
+                href={contactSettings.facebookUrl || "#facebook"}
                 className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:text-gold-light hover:border-gold-light/60 hover:-translate-y-1 transition-all duration-300 shadow-sm"
                 title="Facebook"
               >
                 <Facebook className="w-4 h-4" />
               </a>
               <a
-                href="#youtube"
+                href={contactSettings.youtubeUrl || "#youtube"}
                 className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:text-gold-light hover:border-gold-light/60 hover:-translate-y-1 transition-all duration-300 shadow-sm"
                 title="Youtube"
               >
                 <Youtube className="w-4 h-4" />
               </a>
               <a
-                href="#zalo"
+                href={contactSettings.zaloUrl || "#zalo"}
                 className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:text-gold-light hover:border-gold-light/60 hover:-translate-y-1 transition-all duration-300 shadow-sm"
                 title="Zalo"
               >
                 <MessageCircle className="w-4 h-4" />
               </a>
               <a
-                href="#tiktok"
+                href={contactSettings.tiktokUrl || "#tiktok"}
                 className="text-gray-400 hover:text-gold-light transition-all text-xs font-display font-medium border border-white/10 px-2.5 h-8 flex items-center rounded-full hover:border-gold-light/60"
                 title="Tiktok"
               >
@@ -179,15 +180,15 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-400 mb-8 pb-4 border-b border-white/5">
           <div className="flex items-center gap-3">
             <MapPin className="w-4 h-4 text-gold-dark shrink-0" />
-            <span>123 Đường Năng Lượng, KCN Hòa Phú, H. Long Hồ, Vĩnh Long</span>
+            <span>{contactSettings.address}</span>
           </div>
           <div className="flex items-center gap-3">
             <Phone className="w-4 h-4 text-gold-dark shrink-0" />
-            <span>Hotline hỗ trợ: <strong className="text-[#ECECEC]">1900 1234</strong> (8h00 - 17h30)</span>
+            <span>Hotline hỗ trợ: <a href={`tel:${phoneHref}`} className="text-[#ECECEC] font-bold hover:text-gold-light">{contactSettings.hotline}</a> ({contactSettings.workingHours})</span>
           </div>
           <div className="flex items-center gap-3">
             <Mail className="w-4 h-4 text-gold-dark shrink-0" />
-            <span>Gửi thư: <strong className="text-[#ECECEC]">info@voltara.vn</strong></span>
+            <span>Gửi thư: <a href={`mailto:${contactSettings.email}`} className="text-[#ECECEC] font-bold hover:text-gold-light">{contactSettings.email}</a></span>
           </div>
         </div>
 

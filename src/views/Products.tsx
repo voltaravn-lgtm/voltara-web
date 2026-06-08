@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { Grid, List, Search, Filter, ShieldCheck, Phone, RefreshCw, X, ShoppingCart, Info, Check, Cpu, Shield, Zap, Leaf } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -45,6 +45,7 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedIdFromUrl = searchParams.get("select");
   const { products, showToast } = useApp();
+  const visibleProducts = useMemo(() => products.filter(product => !product.hidden), [products]);
 
   const [activeCategory, setActiveCategory] = useState("all");
   const [filterBrand, setFilterBrand] = useState("all");
@@ -82,21 +83,21 @@ export default function Products() {
   // Auto detect select from url query
   useEffect(() => {
     if (selectedIdFromUrl) {
-      const prod = products.find(p => p.id === selectedIdFromUrl);
+      const prod = visibleProducts.find(p => p.id === selectedIdFromUrl);
       if (prod) {
         setSelectedProduct(prod);
         setActiveDetailImage(prod.image);
       }
     }
-  }, [selectedIdFromUrl, products]);
+  }, [selectedIdFromUrl, visibleProducts]);
 
   // Extract option list dynamically for filters
-  const brands = ["all", ...Array.from(new Set(products.map(p => p.brand)))];
-  const voltages = ["all", ...Array.from(new Set(products.map(p => p.voltage)))];
-  const capacities = ["all", ...Array.from(new Set(products.map(p => p.capacity)))];
+  const brands = ["all", ...Array.from(new Set(visibleProducts.map(p => p.brand)))];
+  const voltages = ["all", ...Array.from(new Set(visibleProducts.map(p => p.voltage)))];
+  const capacities = ["all", ...Array.from(new Set(visibleProducts.map(p => p.capacity)))];
 
   // Filter and sort products
-  const filteredProducts = products.filter(prod => {
+  const filteredProducts = visibleProducts.filter(prod => {
     const matchesCategory = activeCategory === "all" || prod.category === activeCategory;
     const matchesBrand = filterBrand === "all" || prod.brand === filterBrand;
     const matchesVoltage = filterVoltage === "all" || prod.voltage === filterVoltage;
@@ -106,8 +107,10 @@ export default function Products() {
 
     return matchesCategory && matchesBrand && matchesVoltage && matchesCapacity && matchesSearch;
   }).sort((a, b) => {
-    if (sortBy === "newest") return b.id.localeCompare(a.id); // Mock new
-    if (sortBy === "oldest") return a.id.localeCompare(b.id);
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (sortBy === "newest") return bTime - aTime || b.id.localeCompare(a.id);
+    if (sortBy === "oldest") return aTime - bTime || a.id.localeCompare(b.id);
     return 0;
   });
 
@@ -218,7 +221,7 @@ export default function Products() {
                   >
                     <span>{cat.name}</span>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-sm ${activeCategory === cat.id ? "bg-black/20 text-black font-bold" : "bg-white/5 text-gray-600"}`}>
-                      {cat.id === "all" ? products.length : products.filter(p => p.category === cat.id).length}
+                      {cat.id === "all" ? visibleProducts.length : visibleProducts.filter(p => p.category === cat.id).length}
                     </span>
                   </button>
                 ))}
@@ -778,7 +781,7 @@ export default function Products() {
                       <span className={`text-[8px] px-1.5 py-0.5 rounded-sm shrink-0 ${
                         activeCategory === cat.id ? "bg-black/20 text-black font-bold" : "bg-white/5 text-gray-600"
                       }`}>
-                        {cat.id === "all" ? products.length : products.filter(p => p.category === cat.id).length}
+                        {cat.id === "all" ? visibleProducts.length : visibleProducts.filter(p => p.category === cat.id).length}
                       </span>
                     </button>
                   ))}

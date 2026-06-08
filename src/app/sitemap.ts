@@ -11,6 +11,7 @@ const routes = [
   "/giai-phap",
   "/dai-ly",
   "/bao-hanh",
+  "/kich-hoat-bao-hanh",
   "/kien-thuc",
   "/tuyen-dung",
   "/hoc-vien",

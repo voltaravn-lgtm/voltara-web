@@ -28,7 +28,8 @@ import {
   BookOpen,
   Building,
   ShieldCheck,
-  Calculator
+  Calculator,
+  MapPin
 } from "lucide-react";
 
 import HomePageAdmin from "./Admin/HomePageAdmin";
@@ -42,6 +43,7 @@ import DealerAdmin from "./Admin/DealerAdmin";
 import WarrantyAdmin from "./Admin/WarrantyAdmin";
 import QuotesAdmin from "./Admin/QuotesAdmin";
 import NewsletterAdmin from "./Admin/NewsletterAdmin";
+import SiteContactAdmin from "./Admin/SiteContactAdmin";
 
 export default function Admin() {
   const {
@@ -64,7 +66,7 @@ export default function Admin() {
     deleteQuoteRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "recruitment" | "contacts" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
+  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
 
   // Hero config state & multi-slides control
   const [heroTitle, setHeroTitle] = useState(heroSettings.title);
@@ -326,6 +328,22 @@ export default function Admin() {
                 Tin nhắn Liên Hệ
               </span>
               <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "contacts" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-contact-settings"
+              onClick={() => setActiveTab("contactSettings")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
+                activeTab === "contactSettings"
+                  ? "bg-gold-dark/10 border-gold-light text-gold-light shadow-[0_0_15px_rgba(216,154,43,0.15)]"
+                  : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <MapPin className="w-4 h-4" />
+                Thông tin liên hệ
+              </span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "contactSettings" ? "rotate-90 text-gold-light" : ""}`} />
             </button>
 
             <button
@@ -796,6 +814,8 @@ export default function Admin() {
 
             {/* T8. CONTACT SUBMISSIONS VIEWER */}
             {activeTab === "contacts" && <ContactAdmin />}
+
+            {activeTab === "contactSettings" && <SiteContactAdmin />}
 
             {/* T9. ENERGY SOLUTIONS EDITOR */}
             {activeTab === "solutions" && <SolutionsAdmin />}
