@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
+import WebpConverterAdmin from "../app/admin/tools/webp-converter/page";
 import React, { useState } from "react";
 import { useApp, MenuItem, HeroSlide } from "../context/AppContext";
 import { Product } from "../types";
@@ -64,7 +64,7 @@ export default function Admin() {
     deleteQuoteRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "recruitment" | "contacts" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
+  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "recruitment" | "contacts" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
 
   // Hero config state & multi-slides control
   const [heroTitle, setHeroTitle] = useState(heroSettings.title);
@@ -407,6 +407,22 @@ export default function Admin() {
               </span>
               <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "warranties" ? "rotate-90 text-gold-light" : ""}`} />
             </button>
+
+            <button
+  onClick={() => setActiveTab("webp")}
+  className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
+    activeTab === "webp"
+      ? "bg-gold-dark/10 border-gold-light text-gold-light"
+      : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"
+  }`}
+>
+  <span className="flex items-center gap-3">
+    <Upload className="w-4 h-4" />
+    Công cụ WEBP
+  </span>
+
+  <ChevronRight className="w-4 h-4" />
+</button>
 
             <button
               id="admin-tab-recovery"
@@ -789,6 +805,8 @@ export default function Admin() {
 
             {/* T11. WARRANTY RECORDS MANAGER */}
             {activeTab === "warranties" && <WarrantyAdmin />}
+
+            {activeTab === "webp" && <WebpConverterAdmin />}
 
             {/* T6. EMERGENCY SYSTEM RECOVERY */}
             {activeTab === "recovery" && (
