@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   ...buildMetadata({
     title: "Voltara - Pin Lithium, UPS và giải pháp lưu trữ năng lượng",
     path: "/",
-    image: "/images/voltara_banner.webp",
+    image: "/images/logo-voltara-new.webp",
   }),
   metadataBase: new URL(siteUrl),
   applicationName: siteName,

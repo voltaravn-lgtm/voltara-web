@@ -6,7 +6,7 @@ export const siteName = "Voltara";
 export const defaultDescription =
   "Voltara cung cấp pin Lithium, bộ lưu điện UPS, giải pháp lưu trữ năng lượng và dịch vụ bảo hành chính hãng tại Việt Nam.";
 
-const defaultImage = "/images/voltara_banner.webp";
+const defaultImage = "/images/logo-voltara-new.webp";
 
 export function buildMetadata({
   title,
@@ -81,7 +81,7 @@ export const organizationJsonLd = {
   "@type": "Organization",
   name: siteName,
   url: siteUrl,
-  logo: new URL("/images/logo-voltara.webp", siteUrl).toString(),
+  logo: new URL("/images/logo-voltara-new.webp", siteUrl).toString(),
   email: "voltaravn@gmail.com",
 };
 

@@ -70,7 +70,11 @@ export const StatCard: React.FC<{
 // Premium ProductCard matching the photos
 export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
   return (
-    <div className="bg-[#121212] hover:bg-[#1A1A1A] gold-border rounded-lg flex flex-col h-full relative group transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(216,154,43,0.15)]">
+    <Link
+      to={getProductHref(product.id)}
+      className="bg-[#121212] hover:bg-[#1A1A1A] gold-border rounded-lg flex flex-col h-full relative group transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(216,154,43,0.15)] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-light/70"
+      aria-label={`Xem chi tiết ${product.name}`}
+    >
       {/* Brand water mark */}
       <div className="absolute top-2.5 left-2.5 z-10">
         {product.tag && (
@@ -121,16 +125,15 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
             <span>Bảo hành {product.warranty}</span>
           </div>
 
-          <Link
-            to={getProductHref(product.id)}
-            className="flex items-center gap-1.5 text-[10px] font-display font-bold text-gold-light uppercase tracking-widest group/btn hover:text-white transition-colors"
+          <span
+            className="flex items-center gap-1.5 text-[10px] font-display font-bold text-gold-light uppercase tracking-widest group/btn group-hover:text-white transition-colors"
           >
             <span>XEM CHI TIẾT</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
-          </Link>
+          </span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 

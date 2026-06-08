@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, ChevronRight, Phone, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import QuoteRequestModal from "./QuoteRequestModal";
 import { useApp } from "../context/AppContext";
+import { getProductHref } from "../lib/productRoutes";
 import { Product } from "../types";
 
 interface ProductDetailClientProps {
@@ -14,9 +15,15 @@ interface ProductDetailClientProps {
 export default function ProductDetailClient({ product, relatedProducts }: ProductDetailClientProps) {
   const { products } = useApp();
   const currentProduct = products.find((item) => item.id === product.id) || product;
-  const currentRelatedProducts = products.length > 0
-    ? products.filter((item) => item.category === currentProduct.category && item.id !== currentProduct.id).slice(0, 3)
-    : relatedProducts;
+  const productSource = products.length > 0 ? products : [product, ...relatedProducts];
+  const sameCategoryProducts = productSource.filter(
+    (item) => item.category === currentProduct.category && item.id !== currentProduct.id,
+  );
+  const currentRelatedProducts = (
+    sameCategoryProducts.length > 0
+      ? sameCategoryProducts
+      : productSource.filter((item) => item.id !== currentProduct.id)
+  ).slice(0, 3);
 
   const gallery = useMemo(() => {
     const images = [currentProduct.image, ...(currentProduct.images || [])];
@@ -241,7 +248,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
             {currentRelatedProducts.map((item) => (
               <a
                 key={item.id}
-                href={`/san-pham/${item.id}`}
+                href={getProductHref(item.id)}
                 className="group border border-white/10 bg-[#101010] p-4 transition-colors hover:border-gold-dark/50"
               >
                 <div className="aspect-[4/3] bg-black p-3">
