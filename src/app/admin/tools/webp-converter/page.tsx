@@ -37,7 +37,7 @@ function uid() {
 return Math.random().toString(36).slice(2, 9)
 }
 
-export default function WebPConverterPage(): JSX.Element {
+export default function WebPConverterPage() {
 const [items, setItems] = useState<ImageItem[]>([])
 const [quality, setQuality] = useState<number>(82) // 50 - 100
 const [resize, setResize] = useState<ResizeOption>("original")
