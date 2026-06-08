@@ -1,0 +1,595 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Zap, Award, Globe, Shield, ShieldCheck, ChevronRight, ChevronLeft, CheckCircle2, ChevronDown, MapPin, Truck, HelpCircle, Phone, ArrowUpRight } from "lucide-react";
+import { SectionTitle, StatCard, ProductCard } from "../components/Cards";
+import { useApp } from "../context/AppContext";
+import { AnimatePresence, motion } from "motion/react";
+
+export default function Home() {
+  const navigate = useNavigate();
+  const { products, heroSettings, homeContent, warranties } = useApp();
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [warrantySerial, setWarrantySerial] = useState("");
+  const [warrantyResult, setWarrantyResult] = useState<any>(null);
+
+  // Fallback slides list if none specified
+  const slides = heroSettings.slides && heroSettings.slides.length > 0 
+    ? heroSettings.slides 
+    : [
+        {
+          id: "default",
+          title: heroSettings.title,
+          subtitle: heroSettings.subtitle,
+          description: heroSettings.description,
+          bannerImage: heroSettings.bannerImage,
+          logoTextImage: heroSettings.logoTextImage,
+          useLogoImage: heroSettings.useLogoImage
+        }
+      ];
+
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const autoplayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoplaySpeed = heroSettings.autoplaySpeed || 5000;
+
+  const startAutoplay = () => {
+    stopAutoplay();
+    if (slides.length <= 1) return;
+    
+    autoplayTimerRef.current = setInterval(() => {
+      setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
+    }, autoplaySpeed);
+  };
+
+  const stopAutoplay = () => {
+    if (autoplayTimerRef.current) {
+      clearInterval(autoplayTimerRef.current);
+      autoplayTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    startAutoplay();
+    return () => stopAutoplay();
+  }, [slides.length, autoplaySpeed]);
+
+  const handlePrevSlide = () => {
+    stopAutoplay();
+    setCurrentSlideIndex((prev) => (prev - 1 + slides.length) % slides.length);
+    startAutoplay();
+  };
+
+  const handleNextSlide = () => {
+    stopAutoplay();
+    setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
+    startAutoplay();
+  };
+
+  const handleGoToSlide = (idx: number) => {
+    stopAutoplay();
+    setCurrentSlideIndex(idx);
+    startAutoplay();
+  };
+
+  const currentSlide = slides[currentSlideIndex] || slides[0];
+
+  const categories = [
+    { id: "all", name: "Tất cả sản phẩm" },
+    { id: "pin-may-cong-cu", name: "Pin máy công cụ" },
+    { id: "ups-cua-cuon", name: "UPS cửa cuốn" },
+    { id: "pin-xe-dien", name: "Pin xe điện" },
+    { id: "ac-quy-lithium", name: "Ắc quy lithium" },
+  ];
+
+  const filteredProducts = selectedCategory === "all"
+    ? products.slice(0, 4)
+    : products.filter(p => p.category === selectedCategory).slice(0, 4);
+
+  const handleQuickWarrantCheck = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!warrantySerial.trim()) return;
+
+    const upper = warrantySerial.trim().toUpperCase();
+    const found = warranties.find(w => w.serial.toUpperCase() === upper);
+
+    if (found) {
+      setWarrantyResult({
+        name: found.productName,
+        activatedDate: found.activatedDate,
+        warrantyMonths: `${found.termMonths} tháng`,
+        expiryDate: found.expiryDate,
+        status: found.status,
+        isValid: true
+      });
+    } else if (upper.includes("VOLTARA")) {
+      setWarrantyResult({
+        name: "PIN VOLTARA 20V 5.0Ah (Cho máy Makita)",
+        activatedDate: "20/05/2026",
+        warrantyMonths: "12 tháng",
+        expiryDate: "20/05/2027",
+        status: "Đang bảo hành chính hãng (Kích hoạt nhanh)",
+        isValid: true
+      });
+    } else {
+      setWarrantyResult({
+        isValid: false,
+        message: `Không tìm thấy Serial '${upper}'. Hãy kiểm tra lại hoặc thử với mã có sẵn: 'VOLTARA-20V-5AH'.`
+      });
+    }
+  };
+
+  return (
+    <div id="home-page" className="relative">
+      
+      {/* 1. HERO SECTION WITH LUXURY GOLD ENERGY RADIUS */}
+      <section id="home-hero" className="relative min-h-[80vh] lg:min-h-[90vh] pt-16 lg:pt-24 pb-16 lg:pb-24 flex items-center overflow-hidden bg-black">
+        {/* Full-screen Background Banner Image with smooth AnimatePresence transition */}
+        <div className="absolute inset-0 z-0 select-none pointer-events-none">
+          <AnimatePresence mode="wait">
+            <motion.img 
+              key={currentSlideIndex}
+              src={currentSlide.bannerImage} 
+              alt="Voltara Banner Background" 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.9 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8 }}
+              className="w-full h-full object-cover object-center transform scale-100"
+              referrerPolicy="no-referrer"
+            />
+          </AnimatePresence>
+          {/* Overlay to ensure maximum text readability and aesthetic integration */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 lg:from-black/95 lg:via-black/75 lg:to-transparent/10 to-transparent z-1" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 z-1" />
+        </div>
+
+        {/* Futuristic circular glow layers radiating behind content */}
+        <div className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[350px] sm:w-[600px] h-[350px] sm:h-[600px] rounded-full border border-gold-dark/10 animate-spin-slow pointer-events-none z-10" />
+        <div className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[250px] sm:w-[450px] h-[250px] sm:h-[450px] rounded-full border border-gold-dark/5 animate-pulse pointer-events-none z-10" />
+        
+        {/* Soft golden particle overlays decoration */}
+        <div className="absolute top-[20%] left-[10%] w-2 h-2 bg-gold-light/40 rounded-full animate-ping pointer-events-none z-10" />
+        <div className="absolute bottom-[30%] right-[15%] w-1.5 h-1.5 bg-gold-dark/60 rounded-full animate-pulse pointer-events-none z-10" />
+
+        {/* Arrow Navigation for multiple slides */}
+        {slides.length > 1 && (
+          <>
+            <button 
+              onClick={handlePrevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 border border-white/10 bg-black/40 hover:bg-gold-light hover:text-black hover:border-transparent text-white transition-all cursor-pointer select-none"
+              title="Slide trước"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={handleNextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 border border-white/10 bg-black/40 hover:bg-gold-light hover:text-black hover:border-transparent text-white transition-all cursor-pointer select-none"
+              title="Slide kế tiếp"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </>
+        )}
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-20">
+          <div className="max-w-3xl flex flex-col items-start text-left" id="hero-text-grid">
+            
+            <div className="flex items-center gap-2 px-3 py-1 bg-gold-dark/10 border border-gold-dark/25 mb-4 rounded-md select-none">
+              <Zap className="w-3.5 h-3.5 text-gold-light animate-bounce" />
+              <span className="text-[10px] font-display font-bold text-[#ECECEC] tracking-widest uppercase">
+                THƯƠNG HIỆU PIN THẾ HỆ MỚI
+              </span>
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentSlideIndex}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.5 }}
+                className="w-full flex flex-col items-start"
+              >
+                {/* Big Display Brand Header */}
+                {currentSlide.useLogoImage && currentSlide.logoTextImage ? (
+                  <img
+                    src={currentSlide.logoTextImage}
+                    alt={`${currentSlide.title} - ${currentSlide.subtitle}`}
+                    className="h-24 sm:h-28 md:h-32 lg:h-36 w-auto object-contain mb-8 filter drop-shadow-[0_4px_15px_rgba(218,154,43,0.3)] select-none pointer-events-none"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight text-[#ECECEC] glow-text mb-6">
+                    {currentSlide.title} <br />
+                    <span className="text-lg sm:text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-gold-light via-gold-dark to-yellow-600 tracking-wider">
+                      {currentSlide.subtitle}
+                    </span>
+                  </h1>
+                )}
+
+                <p className="text-sm sm:text-base text-gray-200 max-w-xl leading-relaxed mb-8 backdrop-blur-[1px]">
+                  {currentSlide.description}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Action Buttons styled like Voltara specifications */}
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+              <Link
+                id="hero-cta-products"
+                to="/san-pham"
+                className="gold-gradient-bg text-black font-display font-bold py-3.5 px-8 text-xs tracking-widest uppercase hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-[0_4px_25px_rgba(216,154,43,0.35)] duration-300 cursor-pointer text-center"
+              >
+                <span>XEM SẢN PHẨM</span>
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+
+              <Link
+                id="hero-cta-dealer"
+                to="/dai-ly"
+                className="gold-border hover:bg-gold-dark hover:text-black bg-transparent text-[#ECECEC] font-display font-semibold py-3.5 px-8 text-xs tracking-widest uppercase transition-all duration-300 text-center cursor-pointer"
+              >
+                TÌM ĐẠI LÝ
+              </Link>
+
+              <Link
+                id="hero-cta-be-dealer"
+                to="/lien-he?type=register_dealer"
+                className="border border-[#ECECEC]/10 hover:border-[#ECECEC]/30 bg-[#ECECEC]/5 hover:bg-[#ECECEC]/10 text-gray-300 font-display font-semibold py-3.5 px-8 text-xs tracking-widest uppercase text-center transition-all duration-300 cursor-pointer whitespace-nowrap"
+              >
+                TRỞ THÀNH ĐẠI LÝ
+              </Link>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Slide Indicators / Bullet controls at the bottom */}
+        {slides.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5">
+            {slides.map((slide, idx) => (
+              <button
+                key={slide.id || idx}
+                onClick={() => handleGoToSlide(idx)}
+                className={`h-2.5 transition-all duration-300 select-none cursor-pointer ${
+                  currentSlideIndex === idx 
+                    ? "w-8 bg-gold-light" 
+                    : "w-2.5 bg-white/20 hover:bg-white/40"
+                }`}
+                title={`Chuyển tới Slide ${idx + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 2. SPECIFICATION BENEFIT TABS - Horizontal Core Attributes of Voltara */}
+      <section className="bg-[#0A0A0A] border-y border-[#D89A2B]/20 py-8" id="core-attributes-strip">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 ">
+            <div className="flex items-center gap-4 group p-3 gold-border bg-[#121212] hover:bg-[#1A1A1A] transition-all duration-300">
+              <div className="p-3 bg-white/5 text-gold-light group-hover:bg-gold-dark group-hover:text-black transition-all duration-300">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-display font-bold uppercase tracking-wider text-[#ECECEC] mb-0.5">{homeContent.feature1Title || "Công Nghệ Tiên Tiến"}</h4>
+                <p className="text-[11px] text-gray-500">{homeContent.feature1Desc || "Ứng dụng cell pin Lithium dòng sạc siêu thọ."}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 group p-3 gold-border bg-[#121212] hover:bg-[#1A1A1A] transition-all duration-300">
+              <div className="p-3 bg-white/5 text-gold-light group-hover:bg-gold-dark group-hover:text-black transition-all duration-300">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-display font-bold uppercase tracking-wider text-[#ECECEC] mb-0.5">{homeContent.feature2Title || "Chất Lượng Vượt Trội"}</h4>
+                <p className="text-[11px] text-gray-500">{homeContent.feature2Desc || "Vỏ sợi polycarbonate chống vỡ nứt."}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 group p-3 gold-border bg-[#121212] hover:bg-[#1A1A1A] transition-all duration-300">
+              <div className="p-3 bg-white/5 text-gold-light group-hover:bg-gold-dark group-hover:text-black transition-all duration-300">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-display font-bold uppercase tracking-wider text-[#ECECEC] mb-0.5">{homeContent.feature3Title || "Bảo Hành Chính Hãng"}</h4>
+                <p className="text-[11px] text-gray-500">{homeContent.feature3Desc || "Kích hoạt điện tử tra cứu siêu nhanh."}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 group p-3 gold-border bg-[#121212] hover:bg-[#1A1A1A] transition-all duration-300">
+              <div className="p-3 bg-white/5 text-gold-light group-hover:bg-gold-dark group-hover:text-black transition-all duration-300">
+                <Globe className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-display font-bold uppercase tracking-wider text-[#ECECEC] mb-0.5">{homeContent.feature4Title || "Hệ Thống Toàn Quốc"}</h4>
+                <p className="text-[11px] text-gray-500">{homeContent.feature4Desc || "Hàng trăm đại lý phân phối rộng khắp cả nước."}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. DOCK DIRECTORIES PRODUCT BENTO FILTER */}
+      <section className="py-20 bg-[#050505]" id="featured-products-section">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <SectionTitle
+            subtitle="DANH MỤC TIÊU BIỂU"
+            title={homeContent.section2Title || "Sản Phẩm Công Nghệ Voltara"}
+            description={homeContent.section2Desc || "Lõi cell nhập khẩu chất lượng cao, tích hợp bo mạch BMS tự cân bằng thông minh đỉnh cao."}
+          />
+
+
+          {/* Tab Button Filters */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-5 py-2.5 text-xs font-display tracking-wider transition-all duration-300 rounded-md cursor-pointer ${
+                  selectedCategory === cat.id
+                    ? "gold-gradient-bg text-black font-bold border border-transparent shadow-[0_0_15px_rgba(216,154,43,0.3)]"
+                    : "bg-[#121212] text-gray-400 border border-[#D89A2B]/20 hover:border-gold-light hover:text-white"
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Product Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {filteredProducts.map((prod) => (
+              <ProductCard key={prod.id} product={prod} />
+            ))}
+          </div>
+
+          <div className="text-center mt-12 animate-pulse">
+            <Link
+              to="/san-pham"
+              className="inline-flex items-center gap-1.5 text-xs font-display font-bold text-gold-light uppercase tracking-widest hover:text-white transition-colors"
+            >
+              <span>Xem Tất Cả Các Dòng Sản Phẩm</span>
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+        </div>
+      </section>
+
+      {/* 4. STATISTICS COUNTER SECTION */}
+      <section className="py-20 bg-[#0A0A0A] border-y border-white/5 relative overflow-hidden" id="stats-numbers-section">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-7xl h-[1px] bg-gradient-to-r from-transparent via-[#D89A2B]/10 to-transparent" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard
+              number="50+"
+              label="TỈNH THÀNH PHỦ SÓNG"
+              description="Màng lưới logistics và phân phối bảo hảnh liên kết chặt chẽ khắp cả nước"
+              icon={<MapPin className="w-5 h-5" />}
+            />
+            <StatCard
+              number="200+"
+              label="ĐẠI LÝ ỦY QUYỀN"
+              description="Hỗ trợ kỹ thuật lắp đặt nhanh nhẹn, linh kiện sẵn có đầy kho"
+              icon={<Award className="w-5 h-5" />}
+            />
+            <StatCard
+              number="100.000+"
+              label="SẢN PHẨM ĐÃ BÀN GIAO"
+              description="Cung cấp an tâm tuyệt đối, chưa phát hiện trường hợp cháy nổ gây hại"
+              icon={<CheckCircle2 className="w-5 h-5" />}
+            />
+            <StatCard
+              number="3 NĂM"
+              label="BẢO HÀNH CHÍNH HÃNG"
+              description="Bảo hành đổi cũ lấy mới với các dòng lithium ESS cao cấp độc quyền"
+              icon={<Shield className="w-5 h-5" />}
+            />
+          </div>
+
+        </div>
+      </section>
+
+      {/* 5. BENEFITS LIST INTERACTIVE BLOCK */}
+      <section className="py-20 bg-[#050505]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Left side: Luxury visual blocks */}
+            <div className="lg:col-span-5 relative">
+              <div className="absolute -inset-3 radial-bg opacity-40 pointer-events-none" />
+              <div className="relative bg-[#121212] p-8 gold-border shadow-2xl">
+                <span className="text-xs font-display font-semibold text-gold-light tracking-widest uppercase mb-2 block">
+                  ĐỘC QUYỀN THIẾT KẾ
+                </span>
+                <h3 className="text-lg font-display font-extrabold text-[#ECECEC] mb-4 uppercase">
+                  Kiểm Định 10 Lướt An Toàn Tiên Tiến
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed mb-6">
+                  Mỗi pack pin sạc Voltara trước khi lăn bánh khỏi phân xưởng đều trải qua quy trình chạy tải cưỡng bức, kiểm tra điện môi sụt áp, độ khít vỏ kháng nước IP67 và sốc nhiệt nghiêm ngặt.
+                </p>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-xs text-gray-300">
+                    <CheckCircle2 className="w-4 h-4 text-gold-light shrink-0" />
+                    <span>Lõi cell Lithium hạng A bảo chứng kiểm duyệt</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-300">
+                    <CheckCircle2 className="w-4 h-4 text-gold-light shrink-0" />
+                    <span>Mạch BMS cân bằng áp sai lệch &lt; 0.05V</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-300">
+                    <CheckCircle2 className="w-4 h-4 text-gold-light shrink-0" />
+                    <span>Kháng chập cháy đầu dòng xả quá tải đột ngột</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right side: Benefits descriptions */}
+            <div className="lg:col-span-7 flex flex-col justify-center">
+              <span className="inline-block px-3 py-1 gold-border text-[10px] tracking-widest text-[#D89A2B] mb-3 uppercase font-display font-bold bg-[#D89A2B]/5">
+                ƯU THẾ NHÃN HIỆU
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-wider text-[#ECECEC] glow-text mb-6">
+                Vì Sao Thị Trường Lựa Chọn Pin Voltara?
+              </h2>
+              <div className="h-[2px] bg-gradient-to-r from-gold-dark to-transparent w-24 mb-8" />
+
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 bg-white/5 border border-white/5 flex items-center justify-center text-gold-light shrink-0">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-display font-bold text-[#ECECEC] uppercase tracking-wider mb-1">
+                      Cung Ứng Thần Tốc Toàn Quốc
+                    </h4>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Sẵn sàng các loại chân cắm phổ thông Makita, Bosch, Dewalt và hệ tủ điện lưu trữ ESS, hỗ trợ giao vận siêu tốc 24 giờ.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 bg-white/5 border border-white/5 flex items-center justify-center text-gold-light shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-display font-bold text-[#ECECEC] uppercase tracking-wider mb-1">
+                      Kích Hoạt Bảo Hành Điện Tử Toàn Cầu
+                    </h4>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Quét mã QR Code in la-ze chống giả trên từng sản phẩm để tra cứu thông tin hoạt động, kích hoạt phiếu sạc tự động.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 bg-white/5 border border-white/5 flex items-center justify-center text-gold-light shrink-0">
+                    <HelpCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-display font-bold text-[#ECECEC] uppercase tracking-wider mb-1">
+                      Đội Ngũ Ý Chí Kỹ Thuật Trực Chiến
+                    </h4>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Đáp ứng giải quyết thiết kế gia công OEM phụ tải máy nông nghiệp robot tự hành một cách chuẩn xác theo tiến độ dự án.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* 6. TRA CỨU BẢO HÀNH NHANH (FAST UTILITY) */}
+      <section className="py-20 bg-[#0A0A0A] border-t border-[#D89A2B]/20" id="fast-warranty-home-section">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-[#121212] gold-border p-8 rounded-lg relative shadow-xl">
+            <div className="absolute top-0 left-10 transform -translate-y-1/2 bg-[#D89A2B] text-black text-[9px] font-display font-extrabold px-3.5 py-1 uppercase tracking-widest rounded-sm">
+              TIỆN ÍCH KHÁCH HÀNG
+            </div>
+
+            <div className="text-center mb-6">
+              <h3 className="text-sm font-display font-bold uppercase text-[#ECECEC] glow-text tracking-widest">
+                Tra Cứu Nhanh Thông Tin Thiết Bị Voltara
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Nhập số Serial in la-ze sau thân pin để xác định trạng thái bảo hành điện tử chính quy.
+              </p>
+            </div>
+
+            <form onSubmit={handleQuickWarrantCheck} className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={warrantySerial}
+                onChange={(e) => setWarrantySerial(e.target.value)}
+                placeholder="Ví dụ: VOLTARA-20V-MAX-50A"
+                className="flex-1 bg-[#050505] text-[#ECECEC] border border-[#D89A2B]/20 rounded-md px-4 py-3 placeholder-gray-600 text-xs focus:outline-none focus:border-gold-light transition-colors uppercase font-mono"
+              />
+              <button
+                type="submit"
+                className="gold-gradient-bg text-black font-display font-bold transition-all hover:opacity-90 hover:shadow-[0_0_15px_rgba(216,154,43,0.3)] px-6 py-3 text-xs uppercase cursor-pointer duration-300 rounded-md"
+              >
+                TRA CỨU
+              </button>
+            </form>
+
+            {warrantyResult && (
+              <div className="mt-6 p-4 bg-black border border-white/5 text-xs rounded-md">
+                {warrantyResult.isValid ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-[11px]">
+                      <span className="text-gray-500">Thiết bị:</span>
+                      <span className="text-white font-semibold uppercase">{warrantyResult.name}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 pt-1">
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">Ngày kích hoạt:</span>
+                        <span className="text-gray-300 font-mono font-medium">{warrantyResult.activatedDate}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">Hạn bảo hành:</span>
+                        <span className="text-gray-300 font-medium">{warrantyResult.warrantyMonths}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">Ngày hết hạn:</span>
+                        <span className="text-gray-300 font-mono font-medium">{warrantyResult.expiryDate}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">Trạng thái:</span>
+                        <span className="text-emerald-400 font-bold tracking-wide">{warrantyResult.status}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-rose-400 tracking-wide font-medium">{warrantyResult.message}</span>
+                )}
+              </div>
+            )}
+            
+            <div className="text-center mt-4">
+              <Link to="/bao-hanh" className="text-[10px] text-gray-500 hover:text-gold-light underline uppercase tracking-wider">
+                Xem Điều Kiện Bảo Hành Hoàn Chỉnh →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. CONVERT CTA BANNER BOTTOM */}
+      <section className="py-16 bg-gradient-to-r from-gold-dark/5 via-gold-dark/15 to-transparent border-t border-[#D89A2B]/20" id="be-partner-banner-section">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div>
+              <h3 className="text-lg sm:text-xl font-display font-black uppercase text-[#ECECEC] glow-text tracking-wider mb-2">
+                BẠN MUỐN TRỞ THÀNH ĐẠI LÝ ỦY QUYỀN?
+              </h3>
+              <p className="text-xs text-gray-400 max-w-2xl leading-relaxed">
+                Tham gia cùng Voltara dẫn đầu công nghệ pin Lithium tại Việt Nam. Chúng tôi cung ứng mức chiết khấu đại lý cực cao, bảo hiểm trách nhiệm sản phẩm an tâm, biển hiệu quảng bá miễn phí 100%.
+              </p>
+            </div>
+            
+            <Link
+              to="/lien-he?type=register_dealer"
+              className="gold-gradient-bg text-black font-display font-bold px-8 py-3.5 text-xs uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all text-center shrink-0 duration-300 shadow-[0_0_20px_rgba(216,154,43,0.2)] cursor-pointer"
+            >
+              Đăng Ký Làm Đại Lý
+            </Link>
+          </div>
+        </div>
+      </section>
+      
+    </div>
+  );
+}

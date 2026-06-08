@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800;900&family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --gold: #D89A2B;
+  --gold-glow: rgba(216, 154, 43, 0.2);
+  --dark-bg: #050505;
+  --card-bg: #121212;
+}
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Exo 2', 'Chakra Petch', sans-serif;
+  
+  --color-gold-dark: #D89A2B;
+  --color-gold-light: #F5C45A;
+  --color-dark-bg: #050505;
+  --color-card-bg: #121212;
+  --color-card-border: rgba(216, 154, 43, 0.3);
+  
+  --animate-glow-pulse: glowPulse 3s infinite ease-in-out;
+  --animate-spin-slow: spin 20s linear infinite;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(216, 154, 43, 0.15), inset 0 0 5px rgba(216, 154, 43, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(216, 154, 43, 0.4), inset 0 0 10px rgba(216, 154, 43, 0.1);
+  }
+}
+
+/* Base custom styles to align with Voltara dark luxury brand */
+body {
+  background-color: var(--dark-bg);
+  color: #ECECEC;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Sleek Interface design system selectors */
+.glow-text {
+  text-shadow: 0 0 10px var(--gold-glow);
+}
+
+.gold-border {
+  border: 1px solid rgba(216, 154, 43, 0.3);
+}
+
+.gold-gradient-bg {
+  background: linear-gradient(135deg, #D89A2B 0%, #F5C45A 100%);
+}
+
+.radial-bg {
+  background: radial-gradient(circle at 50% 50%, rgba(216, 154, 43, 0.15) 0%, transparent 70%);
+}
+
+/* Custom golden glow utilities */
+.gold-glow-border {
+  border: 1px solid rgba(216, 154, 43, 0.3);
+  transition: all 0.3s ease-in-out;
+}
+
+.gold-glow-border:hover {
+  border-color: #F5C45A;
+  box-shadow: 0 0 15px rgba(216, 154, 43, 0.35);
+}
+
+.gold-text-glow {
+  text-shadow: 0 0 10px rgba(245, 196, 90, 0.4);
+}
+
+.gold-text-gradient {
+  background: linear-gradient(135deg, #F5C45A 0%, #D89A2B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dark-luxury-card {
+  background: linear-gradient(145deg, #121212 0%, #0d0d0d 100%);
+  border: 1px solid rgba(216, 154, 43, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark-luxury-card:hover {
+  border-color: rgba(245, 196, 90, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(216, 154, 43, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Custom scrollbar for dark premium look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222222;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D89A2B;
+}
+
+/* Việt Nam Map lights animation */
+@keyframes mapPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px #F5C45A);
+  }
+}
+
+.map-glow-dot {
+  animation: mapPulse 2s infinite ease-in-out;
+}
