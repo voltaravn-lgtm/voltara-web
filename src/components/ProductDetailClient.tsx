@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, ChevronRight, Phone, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import QuoteRequestModal from "./QuoteRequestModal";
+import OrderRequestModal from "./OrderRequestModal";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
 import { Product } from "../types";
@@ -33,6 +34,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
 
   const [activeImage, setActiveImage] = useState(gallery[0] || currentProduct.image);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
   const descriptionHtml = useMemo(
     () => formatProductDescriptionToHtml(currentProduct.description),
@@ -176,7 +178,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
-                  onClick={() => setIsQuoteModalOpen(true)}
+                  onClick={() => hasVisiblePrice ? setIsOrderModalOpen(true) : setIsQuoteModalOpen(true)}
                   className="inline-flex h-12 items-center justify-center gap-2 bg-gradient-to-r from-[#D89A2B] to-[#F5C45A] px-6 text-[11px] font-display font-black uppercase tracking-widest text-black shadow-[0_0_25px_rgba(216,154,43,0.2)] transition-transform hover:scale-[1.01]"
                 >
                   <ShoppingCart className="h-4 w-4" />
@@ -312,6 +314,12 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
         isOpen={isQuoteModalOpen}
         onClose={() => setIsQuoteModalOpen(false)}
         prepopulatedProduct={currentProduct.name}
+      />
+      <OrderRequestModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        productName={currentProduct.name}
+        productPrice={salePrice || regularPrice}
       />
     </div>
   );
