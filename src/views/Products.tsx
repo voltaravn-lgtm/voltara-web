@@ -487,7 +487,7 @@ export default function Products() {
                   {filteredProducts.map((prod) => (
                     <Link
                       key={prod.id}
-                      to={getProductHref(prod.id)}
+                      to={getProductHref(prod)}
                       className="bg-[#111] hover:bg-[#161616] border border-white/5 hover:border-gold-dark/20 p-5 rounded-lg flex flex-col sm:flex-row items-center gap-6 cursor-pointer group transition-all"
                     >
                       <div className="w-32 h-32 bg-black flex items-center justify-center p-2 border border-white/5 shrink-0 relative">

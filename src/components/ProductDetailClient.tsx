@@ -285,7 +285,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
             {currentRelatedProducts.map((item) => (
               <a
                 key={item.id}
-                href={getProductHref(item.id)}
+                href={getProductHref(item)}
                 className="group border border-white/10 bg-[#101010] p-4 transition-colors hover:border-gold-dark/50"
               >
                 <div className="aspect-square bg-black p-3">

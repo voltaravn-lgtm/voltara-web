@@ -90,7 +90,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
 
   return (
     <Link
-      to={getProductHref(product.id)}
+      to={getProductHref(product)}
       className="bg-[#121212] hover:bg-[#1A1A1A] gold-border rounded-lg flex flex-col h-full relative group transition-all duration-300 shadow-lg hover:shadow-[0_0_30px_rgba(216,154,43,0.15)] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-light/70"
       aria-label={`Xem chi tiết ${product.name}`}
     >
