@@ -14,6 +14,8 @@ import { getMenuBanner } from "../lib/menuBanners";
 import ProductDetailClient from "../components/ProductDetailClient";
 import ProductPromoImage from "../components/ProductPromoImage";
 
+const PRODUCTS_PAGE_SIZE = 12;
+
 // Helper to render markdown and custom layouts inside descriptions
 function formatDescriptionToHtml(desc: string | undefined): string {
   if (!desc) return "";
@@ -63,6 +65,7 @@ export default function Products() {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [quoteProductName, setQuoteProductName] = useState("");
+  const [visibleProductCount, setVisibleProductCount] = useState(PRODUCTS_PAGE_SIZE);
 
   // Count active filters for badge
   const activeFiltersCount = 
@@ -123,6 +126,13 @@ export default function Products() {
     if (sortBy === "oldest") return aTime - bTime || a.id.localeCompare(b.id);
     return 0;
   });
+
+  const displayedProducts = filteredProducts.slice(0, visibleProductCount);
+  const hasMoreProducts = visibleProductCount < filteredProducts.length;
+
+  useEffect(() => {
+    setVisibleProductCount(PRODUCTS_PAGE_SIZE);
+  }, [activeCategory, filterBrand, filterVoltage, filterCapacity, searchQuery, sortBy, viewMode]);
 
   const handleSelectProduct = (product: any) => {
     setSelectedProduct(product);
@@ -466,7 +476,12 @@ export default function Products() {
 
             {/* Dynamic filtered count indicator */}
             <div className="text-xs text-gray-500 select-none flex items-center justify-between">
-              <span>Đang hiển thị <strong>{filteredProducts.length}</strong> sản phẩm lọc tương thích</span>
+              <span>
+                Đang hiển thị <strong>{displayedProducts.length}</strong>
+                {filteredProducts.length > displayedProducts.length && (
+                  <>/<strong>{filteredProducts.length}</strong></>
+                )} sản phẩm lọc tương thích
+              </span>
               {searchQuery && (
                 <span>Kết quả tìm kiếm cho: &ldquo;<strong className="text-gray-300">{searchQuery}</strong>&rdquo;</span>
               )}
@@ -475,8 +490,8 @@ export default function Products() {
             {/* Grid / List render */}
             {filteredProducts.length > 0 ? (
               viewMode === "grid" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredProducts.map((prod) => (
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 lg:gap-6">
+                  {displayedProducts.map((prod) => (
                     <div key={prod.id}>
                       <ProductCard product={prod} />
                     </div>
@@ -484,7 +499,7 @@ export default function Products() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredProducts.map((prod) => (
+                  {displayedProducts.map((prod) => (
                     <Link
                       key={prod.id}
                       to={getProductHref(prod)}
@@ -520,6 +535,21 @@ export default function Products() {
             ) : (
               <div className="py-20 text-center border border-dashed border-white/10 text-gray-500 text-xs">
                 Không tìm thấy sản phẩm tương hợp. Vui lòng thử lại với các lựa chọn bộ lọc khác.
+              </div>
+            )}
+
+            {filteredProducts.length > 0 && hasMoreProducts && (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setVisibleProductCount((current) => Math.min(current + PRODUCTS_PAGE_SIZE, filteredProducts.length))}
+                  className="inline-flex items-center justify-center gap-2 border border-[#D89A2B]/40 bg-[#D89A2B]/10 px-6 py-3 text-[11px] font-display font-bold uppercase tracking-widest text-gold-light transition-all hover:bg-[#D89A2B] hover:text-black"
+                >
+                  Xem thêm sản phẩm
+                  <span className="text-[10px] opacity-70">
+                    ({filteredProducts.length - displayedProducts.length} còn lại)
+                  </span>
+                </button>
               </div>
             )}
 

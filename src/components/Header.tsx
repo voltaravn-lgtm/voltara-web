@@ -4,9 +4,11 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, ChevronDown, MapPin, User, LogIn, Search, ShoppingCart } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Menu, X, Search, ShoppingCart, Sun, Moon } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import CartDrawer from "./CartDrawer";
+import { getProductHref } from "../lib/productRoutes";
 
 export const VoltaraLogo: React.FC<{ className?: string; iconOnly?: boolean }> = ({ className = "h-8", iconOnly = false }) => {
   const [useImgFallback, setUseImgFallback] = useState(false);
@@ -66,8 +68,10 @@ export const VoltaraLogo: React.FC<{ className?: string; iconOnly?: boolean }> =
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isDayMode, setIsDayMode] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -82,8 +86,54 @@ export default function Header() {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  const { menuItems } = useApp();
+  useEffect(() => {
+    const savedMode = localStorage.getItem("voltara_display_mode");
+    const nextIsDayMode = savedMode === "day";
+    setIsDayMode(nextIsDayMode);
+    document.body.classList.toggle("day-mode", nextIsDayMode);
+  }, []);
+
+  const toggleDisplayMode = () => {
+    const nextIsDayMode = !isDayMode;
+    setIsDayMode(nextIsDayMode);
+    document.body.classList.toggle("day-mode", nextIsDayMode);
+    localStorage.setItem("voltara_display_mode", nextIsDayMode ? "day" : "night");
+  };
+
+  const { menuItems, products, articles, openCart, cartCount } = useApp();
   const visibleMenuItems = menuItems.filter((item) => !item.hidden);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const searchResults = normalizedSearch
+    ? [
+        ...products
+          .filter(product =>
+            !product.hidden &&
+            (product.name.toLowerCase().includes(normalizedSearch) ||
+              product.description.toLowerCase().includes(normalizedSearch) ||
+              product.category.toLowerCase().includes(normalizedSearch))
+          )
+          .slice(0, 5)
+          .map(product => ({
+            type: "Sản phẩm",
+            title: product.name,
+            subtitle: product.category,
+            href: getProductHref(product),
+          })),
+        ...articles
+          .filter(article =>
+            article.title.toLowerCase().includes(normalizedSearch) ||
+            article.brief.toLowerCase().includes(normalizedSearch) ||
+            article.category.toLowerCase().includes(normalizedSearch)
+          )
+          .slice(0, 4)
+          .map(article => ({
+            type: "Kiến thức",
+            title: article.title,
+            subtitle: article.category,
+            href: `/kien-thuc?postId=${encodeURIComponent(article.id)}`,
+          })),
+      ].slice(0, 8)
+    : [];
 
   return (
     <>
@@ -133,21 +183,34 @@ export default function Header() {
           <div id="header-actions" className="hidden lg:flex items-center gap-1.5 xl:gap-4 shrink-0">
             <button
               id="search-header-btn"
-              onClick={() => navigate("/kien-thuc")}
+              onClick={() => setIsSearchOpen(true)}
               className="p-1.5 text-gray-400 hover:text-gold-light transition-colors"
               title="Tìm kiếm"
             >
               <Search className="w-4 h-4" />
             </button>
+
+            <button
+              id="theme-toggle-btn"
+              onClick={toggleDisplayMode}
+              className="p-1.5 text-gray-400 hover:text-gold-light transition-colors"
+              title={isDayMode ? "Chế độ ban đêm" : "Chế độ ban ngày"}
+            >
+              {isDayMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </button>
             
             <button
               id="cart-header-btn"
-              onClick={() => navigate("/san-pham")}
+              onClick={openCart}
               className="relative p-1.5 text-gray-400 hover:text-gold-light transition-colors"
               title="Sản phẩm"
             >
               <ShoppingCart className="w-4 h-4" />
-              <span className="absolute top-1 right-0.5 w-1.5 h-1.5 bg-gold-dark rounded-full shadow-[0_0_5px_#F5C45A]" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 rounded-full bg-gold-dark px-1 text-center text-[9px] font-bold leading-4 text-black shadow-[0_0_5px_#F5C45A]">
+                  {cartCount}
+                </span>
+              )}
             </button>
 
             <Link
@@ -163,10 +226,15 @@ export default function Header() {
           <div id="mobile-menu-trigger" className="flex lg:hidden items-center gap-3">
             <button
               id="cart-mobile-btn"
-              onClick={() => navigate("/san-pham")}
-              className="p-2 text-gray-400 hover:text-gold-light transition-colors"
+              onClick={openCart}
+              className="relative p-2 text-gray-400 hover:text-gold-light transition-colors"
             >
               <ShoppingCart className="w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute top-0 right-0 min-w-4 h-4 rounded-full bg-gold-dark px-1 text-center text-[9px] font-bold leading-4 text-black">
+                  {cartCount}
+                </span>
+              )}
             </button>
             <button
               id="mobile-nav-toggle"
@@ -253,6 +321,53 @@ export default function Header() {
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
         />
       )}
+      {isSearchOpen && (
+        <div className="fixed inset-0 z-[75] bg-black/85 backdrop-blur-sm p-4" onClick={() => setIsSearchOpen(false)}>
+          <div className="mx-auto mt-24 w-full max-w-2xl border border-gold-dark/30 bg-[#0A0A0A] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center gap-3 border border-white/10 bg-black px-4 py-3">
+              <Search className="h-5 w-5 text-gold-light" />
+              <input
+                autoFocus
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Tìm sản phẩm, bài viết..."
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
+              />
+              <button type="button" onClick={() => setIsSearchOpen(false)} className="p-1 text-gray-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[55vh] overflow-y-auto">
+              {!normalizedSearch ? (
+                <p className="px-2 py-8 text-center text-xs font-display font-bold uppercase tracking-widest text-gray-600">Nhập từ khóa để tìm kiếm</p>
+              ) : searchResults.length === 0 ? (
+                <p className="px-2 py-8 text-center text-xs font-display font-bold uppercase tracking-widest text-gray-600">Không tìm thấy kết quả</p>
+              ) : (
+                <div className="space-y-2">
+                  {searchResults.map((result) => (
+                    <Link
+                      key={`${result.type}-${result.href}`}
+                      to={result.href}
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setSearchQuery("");
+                      }}
+                      className="block border border-white/10 bg-[#111] px-4 py-3 hover:border-gold-dark/50 hover:bg-[#151515]"
+                    >
+                      <div className="text-[9px] font-display font-bold uppercase tracking-widest text-gold-light">{result.type}</div>
+                      <div className="mt-1 line-clamp-1 text-xs font-display font-bold uppercase text-white">{result.title}</div>
+                      <div className="mt-1 text-[10px] text-gray-500">{result.subtitle}</div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <CartDrawer />
     </>
   );
 }

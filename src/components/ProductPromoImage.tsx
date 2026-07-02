@@ -24,7 +24,7 @@ function isPromoOverlayActive(enabled: boolean, imageUrl: string, endDate?: stri
 function getOverlaySizingClasses(imgClassName = "") {
   const sizeClasses = imgClassName
     .split(/\s+/)
-    .filter((item) => /^(max-h-|max-w-|h-|w-|object-)/.test(item));
+    .filter((item) => /^(max-h-|max-w-|h-|w-|object-|transition-|duration-|ease-|scale-|hover:scale-|group-hover:scale-)/.test(item));
 
   return classNames(...sizeClasses, "object-contain");
 }

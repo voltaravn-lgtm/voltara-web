@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
-import { Product, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course } from "../types";
+import { Product, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
 import { auth, db, isFirebaseConfigured } from "../lib/firebase";
 import { isAdminEmail } from "../lib/adminAuth";
@@ -192,6 +192,15 @@ interface AppContextType {
   updateContactSettings: (settings: SiteContactSettings) => Promise<void>;
   promoOverlaySettings: PromoOverlaySettings;
   updatePromoOverlaySettings: (settings: PromoOverlaySettings) => Promise<void>;
+  cartItems: CartItem[];
+  isCartOpen: boolean;
+  openCart: () => void;
+  closeCart: () => void;
+  addToCart: (product: Product, quantity?: number) => void;
+  updateCartQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  cartCount: number;
 
   // Custom Toast Notification System
   toasts: ToastMessage[];
@@ -542,6 +551,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem("voltara_promo_overlay_settings");
     return saved ? { ...defaultPromoOverlaySettings, ...JSON.parse(saved) } : defaultPromoOverlaySettings;
   });
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem("voltara_cart_items");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   // Toast status state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -846,6 +861,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem("voltara_promo_overlay_settings", JSON.stringify(promoOverlaySettings));
   }, [promoOverlaySettings]);
+
+  useEffect(() => {
+    localStorage.setItem("voltara_cart_items", JSON.stringify(cartItems));
+  }, [cartItems]);
 
   // Administration Helpers
   const resetToDefault = () => {
@@ -1209,6 +1228,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const openCart = () => setIsCartOpen(true);
+  const closeCart = () => setIsCartOpen(false);
+
+  const addToCart = (product: Product, quantity = 1) => {
+    const safeQuantity = Math.max(1, Math.floor(quantity || 1));
+    setCartItems(prev => {
+      const existing = prev.find(item => item.productId === product.id);
+      if (existing) {
+        return prev.map(item =>
+          item.productId === product.id
+            ? { ...item, quantity: item.quantity + safeQuantity }
+            : item
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          quantity: safeQuantity,
+          addedAt: new Date().toISOString(),
+        },
+      ];
+    });
+    showToast(`Đã thêm "${product.name}" vào giỏ hàng.`, "success");
+  };
+
+  const updateCartQuantity = (productId: string, quantity: number) => {
+    const safeQuantity = Math.max(0, Math.floor(quantity || 0));
+    setCartItems(prev =>
+      safeQuantity <= 0
+        ? prev.filter(item => item.productId !== productId)
+        : prev.map(item => item.productId === productId ? { ...item, quantity: safeQuantity } : item)
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCartItems(prev => prev.filter(item => item.productId !== productId));
+  };
+
+  const clearCart = () => {
+    setCartItems([]);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1249,6 +1312,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateContactSettings,
         promoOverlaySettings,
         updatePromoOverlaySettings,
+        cartItems,
+        isCartOpen,
+        openCart,
+        closeCart,
+        addToCart,
+        updateCartQuantity,
+        removeFromCart,
+        clearCart,
+        cartCount,
         resetToDefault,
         updateProduct,
         addProduct,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronRight, Phone, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Phone, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import QuoteRequestModal from "./QuoteRequestModal";
 import OrderRequestModal from "./OrderRequestModal";
 import { useApp } from "../context/AppContext";
@@ -15,7 +15,7 @@ interface ProductDetailClientProps {
 }
 
 export default function ProductDetailClient({ product, relatedProducts }: ProductDetailClientProps) {
-  const { products } = useApp();
+  const { products, addToCart } = useApp();
   const currentProduct = products.find((item) => item.id === product.id) || product;
   const productSource = (products.length > 0 ? products : [product, ...relatedProducts]).filter(item => !item.hidden);
   const sameCategoryProducts = productSource.filter(
@@ -60,6 +60,17 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
   const regularPrice = formatDisplayPrice(currentProduct.price);
   const salePrice = formatDisplayPrice(currentProduct.salePrice);
   const hasVisiblePrice = Boolean(regularPrice || salePrice);
+  const activeImageIndex = Math.max(0, gallery.findIndex((image) => image === activeImage));
+  const goToPreviousImage = () => {
+    if (gallery.length <= 1) return;
+    const nextIndex = activeImageIndex <= 0 ? gallery.length - 1 : activeImageIndex - 1;
+    setActiveImage(gallery[nextIndex]);
+  };
+  const goToNextImage = () => {
+    if (gallery.length <= 1) return;
+    const nextIndex = activeImageIndex >= gallery.length - 1 ? 0 : activeImageIndex + 1;
+    setActiveImage(gallery[nextIndex]);
+  };
 
   useEffect(() => {
     setActiveImage(gallery[0] || currentProduct.image);
@@ -102,8 +113,28 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                     src={activeImage}
                     alt={currentProduct.name}
                     className="relative z-10"
-                    imgClassName="max-h-[84%] max-w-[84%] object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.7)]"
+                    imgClassName="h-full w-full object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.7)]"
                   />
+                  {gallery.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={goToPreviousImage}
+                        className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center border border-gold-dark/40 bg-black/70 text-gold-light backdrop-blur-sm transition-colors hover:border-gold-light hover:text-white"
+                        aria-label="Xem ảnh trước"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goToNextImage}
+                        className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center border border-gold-dark/40 bg-black/70 text-gold-light backdrop-blur-sm transition-colors hover:border-gold-light hover:text-white"
+                        aria-label="Xem ảnh tiếp theo"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 {gallery.length > 1 && (
@@ -176,6 +207,16 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
               )}
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                {hasVisiblePrice && (
+                  <button
+                    type="button"
+                    onClick={() => addToCart(currentProduct)}
+                    className="inline-flex h-12 items-center justify-center gap-2 border border-gold-dark/40 px-6 text-[11px] font-display font-black uppercase tracking-widest text-gold-light transition-colors hover:border-gold-light hover:text-white"
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    Thêm giỏ hàng
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => hasVisiblePrice ? setIsOrderModalOpen(true) : setIsQuoteModalOpen(true)}

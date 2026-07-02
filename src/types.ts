@@ -22,6 +22,9 @@ export interface Product {
   barcode?: string;
   stockQuantity?: string;
   stockStatus?: "in-stock" | "low-stock" | "out-of-stock" | "preorder" | "";
+  syncChannel?: "" | "nhanh" | "haravan" | "kiotviet" | "sapo" | "other";
+  externalProductId?: string;
+  externalVariantId?: string;
   haravanProductId?: string;
   haravanVariantId?: string;
   syncEnabled?: boolean;
@@ -32,6 +35,12 @@ export interface Product {
   specs: {
     [key: string]: string;
   };
+}
+
+export interface CartItem {
+  productId: string;
+  quantity: number;
+  addedAt: string;
 }
 
 export interface Solution {

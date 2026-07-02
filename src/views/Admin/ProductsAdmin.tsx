@@ -31,6 +31,9 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   barcode: "",
   stockQuantity: "",
   stockStatus: "",
+  syncChannel: "",
+  externalProductId: "",
+  externalVariantId: "",
   haravanProductId: "",
   haravanVariantId: "",
   syncEnabled: false,
@@ -104,7 +107,14 @@ export default function ProductsAdmin() {
   const handleOpenProductModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setProductForm({ ...product, images: product.images || [], hidden: product.hidden ?? false });
+      setProductForm({
+        ...product,
+        images: product.images || [],
+        hidden: product.hidden ?? false,
+        syncChannel: product.syncChannel || (product.haravanProductId || product.haravanVariantId ? "haravan" : ""),
+        externalProductId: product.externalProductId || product.haravanProductId || "",
+        externalVariantId: product.externalVariantId || product.haravanVariantId || "",
+      });
     } else {
       setEditingProduct(null);
       setProductForm(createBlankProductForm("VOLTARA-" + Math.floor(Math.random() * 90000 + 10000)));
@@ -387,8 +397,9 @@ export default function ProductsAdmin() {
       ["So ton", (product) => product.stockQuantity],
       ["Trang thai kho", (product) => product.stockStatus],
       ["Cho dong bo", (product) => product.syncEnabled ? "Co" : "Khong"],
-      ["Haravan Product ID", (product) => product.haravanProductId],
-      ["Haravan Variant ID", (product) => product.haravanVariantId],
+      ["Kenh dong bo", (product) => product.syncChannel],
+      ["External Product ID", (product) => product.externalProductId || product.haravanProductId],
+      ["External Variant ID", (product) => product.externalVariantId || product.haravanVariantId],
       ["Lan dong bo gan nhat", (product) => product.lastSyncedAt],
       ["Trang thai hien thi", (product) => product.hidden ? "Dang an" : "Dang hien"],
       ["Anh dai dien", (product) => product.image],
@@ -719,7 +730,7 @@ export default function ProductsAdmin() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Thong tin kho & SKU</h3>
-                      <p className="mt-1 text-[10px] text-gray-500">Chuan bi du lieu de sau nay lien ket Haravan, Shopee, Tiki, TikTok Shop.</p>
+                      <p className="mt-1 text-[10px] text-gray-500">Chuan bi du lieu de sau nay lien ket Nhanh.vn, Haravan, Shopee, Tiki, TikTok Shop.</p>
                     </div>
                     <label className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gray-300 cursor-pointer">
                       <input
@@ -780,23 +791,38 @@ export default function ProductsAdmin() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/5 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-white/5 pt-4">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Haravan Product ID</label>
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Kenh dong bo</label>
+                      <select
+                        value={productForm.syncChannel}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, syncChannel: e.target.value as Product["syncChannel"] }))}
+                        className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none uppercase font-bold"
+                      >
+                        <option value="">Chua chon</option>
+                        <option value="nhanh">Nhanh.vn</option>
+                        <option value="haravan">Haravan</option>
+                        <option value="kiotviet">KiotViet</option>
+                        <option value="sapo">Sapo</option>
+                        <option value="other">Khac</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">External Product ID</label>
                       <input
                         type="text"
-                        value={productForm.haravanProductId}
-                        onChange={(e) => setProductForm(prev => ({ ...prev, haravanProductId: e.target.value }))}
+                        value={productForm.externalProductId}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, externalProductId: e.target.value }))}
                         placeholder="De trong neu chua lien ket"
                         className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Haravan Variant ID</label>
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">External Variant ID</label>
                       <input
                         type="text"
-                        value={productForm.haravanVariantId}
-                        onChange={(e) => setProductForm(prev => ({ ...prev, haravanVariantId: e.target.value }))}
+                        value={productForm.externalVariantId}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, externalVariantId: e.target.value }))}
                         placeholder="Ma bien the kho"
                         className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
                       />

@@ -40,6 +40,63 @@ body {
   overflow-x: hidden;
 }
 
+body.day-mode {
+  background: #f6f6f3;
+  color: #171717;
+}
+
+body.day-mode,
+body.day-mode #products-page,
+body.day-mode #main-footer,
+body.day-mode #admin-dashboard-page,
+body.day-mode #warranty-page,
+body.day-mode #solutions-page {
+  background-color: #f6f6f3 !important;
+}
+
+body.day-mode #main-header {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-bottom-color: rgba(216, 154, 43, 0.28) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+}
+
+body.day-mode #main-header nav a,
+body.day-mode #main-header #header-actions button,
+body.day-mode #main-header #mobile-menu-trigger button {
+  color: #1f2937 !important;
+}
+
+body.day-mode #main-header nav a:hover,
+body.day-mode #main-header #header-actions button:hover,
+body.day-mode #main-header #mobile-menu-trigger button:hover {
+  color: #b7791f !important;
+}
+
+body.day-mode #main-footer {
+  color: #1f2937;
+  border-top-color: rgba(216, 154, 43, 0.25) !important;
+}
+
+body.day-mode #main-footer p,
+body.day-mode #main-footer a,
+body.day-mode #main-footer span {
+  color: #374151;
+}
+
+body.day-mode #products-page > section:first-of-type {
+  background-color: #050505 !important;
+}
+
+body.day-mode #products-page > section:not(:first-of-type),
+body.day-mode #products-page .max-w-7xl {
+  background-color: transparent;
+}
+
+body.day-mode .fixed,
+body.day-mode .fixed * {
+  color-scheme: light;
+}
+
 /* Sleek Interface design system selectors */
 .glow-text {
   text-shadow: 0 0 10px var(--gold-glow);
