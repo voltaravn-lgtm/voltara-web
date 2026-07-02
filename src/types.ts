@@ -18,6 +18,14 @@ export interface Product {
   category: string;
   price?: string;
   salePrice?: string;
+  sku?: string;
+  barcode?: string;
+  stockQuantity?: string;
+  stockStatus?: "in-stock" | "low-stock" | "out-of-stock" | "preorder" | "";
+  haravanProductId?: string;
+  haravanVariantId?: string;
+  syncEnabled?: boolean;
+  lastSyncedAt?: string;
   hidden?: boolean;
   createdAt?: string;
   updatedAt?: string;

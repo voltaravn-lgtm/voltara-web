@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
-import { Battery, Plus, Edit, Trash2, X, Save, Copy, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon, Link as LinkIcon, List, Eye, Upload, Loader2, Search, LayoutGrid, Rows3, EyeOff } from "lucide-react";
+import { Battery, Plus, Edit, Trash2, X, Save, Copy, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon, Link as LinkIcon, List, Eye, Upload, Loader2, Search, LayoutGrid, Rows3, EyeOff, Download } from "lucide-react";
 
 const defaultSpecTemplate: Product["specs"] = {
   "Công suất tối đa": "",
@@ -27,6 +27,14 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   category: "",
   price: "",
   salePrice: "",
+  sku: "",
+  barcode: "",
+  stockQuantity: "",
+  stockStatus: "",
+  haravanProductId: "",
+  haravanVariantId: "",
+  syncEnabled: false,
+  lastSyncedAt: "",
   hidden: false,
   specs: { ...defaultSpecTemplate },
 });
@@ -157,6 +165,7 @@ export default function ProductsAdmin() {
         !normalizedSearchQuery ||
         prod.name.toLowerCase().includes(normalizedSearchQuery) ||
         prod.id.toLowerCase().includes(normalizedSearchQuery) ||
+        (prod.sku || "").toLowerCase().includes(normalizedSearchQuery) ||
         prod.category.toLowerCase().includes(normalizedSearchQuery) ||
         prod.brand.toLowerCase().includes(normalizedSearchQuery);
       const matchesVisibility =
@@ -340,6 +349,74 @@ export default function ProductsAdmin() {
     }));
   };
 
+  const escapeExcelCell = (value: unknown) => {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  };
+
+  const formatSpecsForExport = (specs: Product["specs"] | undefined) => {
+    return Object.entries(specs || {})
+      .filter(([, value]) => String(value || "").trim())
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("\n");
+  };
+
+  const handleExportProductsExcel = () => {
+    const exportRows = filteredAdminProducts.length ? filteredAdminProducts : products;
+    if (!exportRows.length) {
+      showToast("Chua co san pham de xuat file.", "warning");
+      return;
+    }
+
+    const columns: Array<[string, (product: Product) => unknown]> = [
+      ["ID", (product) => product.id],
+      ["Ten san pham", (product) => product.name],
+      ["Danh muc", (product) => product.category],
+      ["Thuong hieu", (product) => product.brand],
+      ["Dien ap", (product) => product.voltage],
+      ["Dung luong", (product) => product.capacity],
+      ["Cell", (product) => product.cellType],
+      ["Bao hanh", (product) => product.warranty],
+      ["Gia ban", (product) => product.price],
+      ["Gia giam", (product) => product.salePrice],
+      ["SKU", (product) => product.sku],
+      ["Barcode", (product) => product.barcode],
+      ["So ton", (product) => product.stockQuantity],
+      ["Trang thai kho", (product) => product.stockStatus],
+      ["Cho dong bo", (product) => product.syncEnabled ? "Co" : "Khong"],
+      ["Haravan Product ID", (product) => product.haravanProductId],
+      ["Haravan Variant ID", (product) => product.haravanVariantId],
+      ["Lan dong bo gan nhat", (product) => product.lastSyncedAt],
+      ["Trang thai hien thi", (product) => product.hidden ? "Dang an" : "Dang hien"],
+      ["Anh dai dien", (product) => product.image],
+      ["Anh bo sung", (product) => (product.images || []).join("\n")],
+      ["Mo ta", (product) => product.description],
+      ["Thong so ky thuat", (product) => formatSpecsForExport(product.specs)],
+      ["Ngay tao", (product) => product.createdAt],
+      ["Ngay cap nhat", (product) => product.updatedAt],
+    ];
+
+    const headerCells = columns.map(([label]) => `<th>${escapeExcelCell(label)}</th>`).join("");
+    const bodyRows = exportRows.map((product) => (
+      `<tr>${columns.map(([, getter]) => `<td style="mso-number-format:'\\@'; white-space:pre-wrap;">${escapeExcelCell(getter(product))}</td>`).join("")}</tr>`
+    )).join("");
+    const workbook = `<!doctype html><html><head><meta charset="UTF-8" /></head><body><table border="1"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
+    const blob = new Blob(["\ufeff", workbook], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `voltara-products-${today}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Da xuat ${exportRows.length} san pham ra Excel.`, "success");
+  };
+
   return (
     <div id="products-admin-module" className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -402,6 +479,16 @@ export default function ProductsAdmin() {
                 <Rows3 className="w-4 h-4" />
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleExportProductsExcel}
+              className="flex items-center justify-center gap-1.5 px-3 border border-gold-dark/40 bg-black text-[10px] text-gold-light font-display font-bold uppercase tracking-widest hover:border-gold-light transition-colors"
+              title="Xuat file Excel san pham"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Excel
+            </button>
 
             <div className="flex items-center px-3 border border-[#1A1A1A] bg-black text-[10px] text-gray-500 font-mono uppercase">
               {filteredAdminProducts.length}/{products.length} sản phẩm
@@ -626,6 +713,104 @@ export default function ProductsAdmin() {
                     placeholder="VD: 24 tháng"
                     className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
                   />
+                </div>
+
+                <div className="col-span-1 sm:col-span-2 border border-gold-dark/20 bg-[#080808] p-4 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Thong tin kho & SKU</h3>
+                      <p className="mt-1 text-[10px] text-gray-500">Chuan bi du lieu de sau nay lien ket Haravan, Shopee, Tiki, TikTok Shop.</p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(productForm.syncEnabled)}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, syncEnabled: e.target.checked }))}
+                        className="w-3.5 h-3.5 accent-gold-dark"
+                      />
+                      Cho dong bo
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">SKU</label>
+                      <input
+                        type="text"
+                        value={productForm.sku}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, sku: e.target.value }))}
+                        placeholder="VD: QZJ004-21V"
+                        className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Barcode</label>
+                      <input
+                        type="text"
+                        value={productForm.barcode}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, barcode: e.target.value }))}
+                        placeholder="EAN/UPC neu co"
+                        className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">So ton</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={productForm.stockQuantity}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, stockQuantity: e.target.value }))}
+                        placeholder="VD: 20"
+                        className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Trang thai kho</label>
+                      <select
+                        value={productForm.stockStatus}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, stockStatus: e.target.value as Product["stockStatus"] }))}
+                        className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none uppercase font-bold"
+                      >
+                        <option value="">Chua dat</option>
+                        <option value="in-stock">Con hang</option>
+                        <option value="low-stock">Sap het</option>
+                        <option value="out-of-stock">Het hang</option>
+                        <option value="preorder">Cho dat truoc</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/5 pt-4">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Haravan Product ID</label>
+                      <input
+                        type="text"
+                        value={productForm.haravanProductId}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, haravanProductId: e.target.value }))}
+                        placeholder="De trong neu chua lien ket"
+                        className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Haravan Variant ID</label>
+                      <input
+                        type="text"
+                        value={productForm.haravanVariantId}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, haravanVariantId: e.target.value }))}
+                        placeholder="Ma bien the kho"
+                        className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Lan dong bo gan nhat</label>
+                      <input
+                        type="text"
+                        value={productForm.lastSyncedAt || "Chua dong bo"}
+                        readOnly
+                        className="w-full bg-black/60 border border-[#1A1A1A] text-gray-500 px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <label className="col-span-1 sm:col-span-2 flex items-center justify-between gap-4 border border-[#1A1A1A] bg-black/70 px-4 py-3 cursor-pointer">

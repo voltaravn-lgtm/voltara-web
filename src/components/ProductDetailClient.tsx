@@ -320,6 +320,8 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
         onClose={() => setIsOrderModalOpen(false)}
         productName={currentProduct.name}
         productPrice={salePrice || regularPrice}
+        productSku={currentProduct.sku}
+        productId={currentProduct.id}
       />
     </div>
   );
