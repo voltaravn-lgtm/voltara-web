@@ -8,9 +8,11 @@ import { Link } from "react-router-dom";
 import { ShieldAlert, ShieldCheck, Check, X, Phone, Mail, ClipboardCopy, Search, RefreshCw, Zap, Clock, Shield, FileText, ClipboardCheck, Wrench, Headphones, ArrowRight, ArrowDown } from "lucide-react";
 import { SectionTitle } from "../components/Cards";
 import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Warranty() {
-  const { warranties } = useApp();
+  const { warranties, menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/bao-hanh", "/images/bao-hanh.webp");
   const [serial, setSerial] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
@@ -99,7 +101,7 @@ export default function Warranty() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/bao-hanh.webp" 
+            src={bannerImage} 
             alt="Voltara Warranty Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-90"
             referrerPolicy="no-referrer"

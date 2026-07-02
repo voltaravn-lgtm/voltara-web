@@ -83,6 +83,7 @@ export default function Header() {
   }, [location.pathname]);
 
   const { menuItems } = useApp();
+  const visibleMenuItems = menuItems.filter((item) => !item.hidden);
 
   return (
     <>
@@ -101,7 +102,7 @@ export default function Header() {
 
           {/* Desktop Navigation Menu */}
           <nav id="desktop-nav" className="hidden lg:flex items-center gap-0.5 xl:gap-2 whitespace-nowrap">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const isActive =
                 item.path === "/"
                   ? location.pathname === "/"
@@ -199,7 +200,7 @@ export default function Header() {
             </div>
 
             <div className="mt-8 flex flex-col gap-4">
-              {menuItems.map((item) => {
+              {visibleMenuItems.map((item) => {
                 const isActive =
                   item.path === "/"
                     ? location.pathname === "/"

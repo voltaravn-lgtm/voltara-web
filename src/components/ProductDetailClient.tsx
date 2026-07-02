@@ -6,6 +6,7 @@ import QuoteRequestModal from "./QuoteRequestModal";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
 import { Product } from "../types";
+import ProductPromoImage from "./ProductPromoImage";
 
 interface ProductDetailClientProps {
   product: Product;
@@ -41,6 +42,22 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
     () => getShortDescription(currentProduct.description),
     [currentProduct.description],
   );
+  const summarySpecs = useMemo(
+    () => [
+      ["Điện áp", currentProduct.voltage],
+      ["Dung lượng", currentProduct.capacity],
+      ["Cell", currentProduct.cellType],
+      ["Bảo hành", currentProduct.warranty],
+    ].filter(([, value]) => String(value || "").trim()),
+    [currentProduct.voltage, currentProduct.capacity, currentProduct.cellType, currentProduct.warranty],
+  );
+  const technicalSpecs = useMemo(
+    () => Object.entries(currentProduct.specs || {}).filter(([, value]) => String(value || "").trim()),
+    [currentProduct.specs],
+  );
+  const regularPrice = formatDisplayPrice(currentProduct.price);
+  const salePrice = formatDisplayPrice(currentProduct.salePrice);
+  const hasVisiblePrice = Boolean(regularPrice || salePrice);
 
   useEffect(() => {
     setActiveImage(gallery[0] || currentProduct.image);
@@ -72,18 +89,18 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:items-center">
             <div className="lg:col-span-6">
               <div className="border border-gold-dark/25 bg-[#0A0A0A] p-5 shadow-[0_0_40px_rgba(216,154,43,0.08)]">
-                <div className="relative aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+                <div className="relative aspect-square bg-black flex items-center justify-center overflow-hidden">
                   {currentProduct.tag && (
                     <span className="absolute left-4 top-4 z-10 bg-gold-dark px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wider text-black">
                       {currentProduct.tag}
                     </span>
                   )}
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(216,154,43,0.13)_0%,transparent_65%)]" />
-                  <img
+                  <ProductPromoImage
                     src={activeImage}
                     alt={currentProduct.name}
-                    className="relative z-10 max-h-[84%] max-w-[84%] object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.7)]"
-                    referrerPolicy="no-referrer"
+                    className="relative z-10"
+                    imgClassName="max-h-[84%] max-w-[84%] object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.7)]"
                   />
                 </div>
 
@@ -94,7 +111,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                         key={image}
                         type="button"
                         onClick={() => setActiveImage(image)}
-                        className={`aspect-[4/3] border bg-black p-2 transition-colors ${
+                        className={`aspect-square border bg-black p-2 transition-colors ${
                           activeImage === image ? "border-gold-light" : "border-white/10 hover:border-gold-dark/50"
                         }`}
                         aria-label={`Xem ảnh ${currentProduct.name}`}
@@ -124,19 +141,37 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 {shortDescription}
               </p>
 
-              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[
-                  ["Điện áp", currentProduct.voltage],
-                  ["Dung lượng", currentProduct.capacity],
-                  ["Cell", currentProduct.cellType],
-                  ["Bảo hành", currentProduct.warranty],
-                ].map(([label, value]) => (
-                  <div key={label} className="border border-white/10 bg-[#101010] px-4 py-3">
-                    <div className="text-[9px] font-display font-bold uppercase tracking-wider text-gray-500">{label}</div>
-                    <div className="mt-1 text-xs font-semibold text-[#ECECEC]">{value}</div>
-                  </div>
-                ))}
-              </div>
+              {hasVisiblePrice && (
+                <div className="mt-5 inline-flex flex-wrap items-end gap-3 border border-gold-dark/25 bg-gold-dark/5 px-4 py-3">
+                  {salePrice ? (
+                    <>
+                      <div>
+                        <div className="text-[9px] font-display font-bold uppercase tracking-widest text-gray-500">Giá giảm</div>
+                        <div className="text-2xl font-display font-black text-gold-light">{salePrice}</div>
+                      </div>
+                      {regularPrice && (
+                        <div className="pb-1 text-sm font-semibold text-gray-500 line-through">{regularPrice}</div>
+                      )}
+                    </>
+                  ) : (
+                    <div>
+                      <div className="text-[9px] font-display font-bold uppercase tracking-widest text-gray-500">Giá bán</div>
+                      <div className="text-2xl font-display font-black text-gold-light">{regularPrice}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {summarySpecs.length > 0 && (
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {summarySpecs.map(([label, value]) => (
+                    <div key={label} className="border border-white/10 bg-[#101010] px-4 py-3">
+                      <div className="text-[9px] font-display font-bold uppercase tracking-wider text-gray-500">{label}</div>
+                      <div className="mt-1 text-xs font-semibold text-[#ECECEC]">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <button
@@ -145,7 +180,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                   className="inline-flex h-12 items-center justify-center gap-2 bg-gradient-to-r from-[#D89A2B] to-[#F5C45A] px-6 text-[11px] font-display font-black uppercase tracking-widest text-black shadow-[0_0_25px_rgba(216,154,43,0.2)] transition-transform hover:scale-[1.01]"
                 >
                   <ShoppingCart className="h-4 w-4" />
-                  Yêu cầu báo giá
+                  {hasVisiblePrice ? "Đặt hàng / tư vấn" : "Yêu cầu báo giá"}
                 </button>
                 <a
                   href="tel:19001234"
@@ -176,27 +211,29 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
               />
             </div>
           )}
-
-          <div className="border border-white/10 bg-[#0C0C0C] p-6 lg:p-8">
-            <div className="mb-6 flex items-center gap-2">
-              <Zap className="h-5 w-5 text-gold-light" />
-              <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">
-                Thông số kỹ thuật
-              </h2>
-            </div>
-
-            <div className="divide-y divide-white/10">
-              {Object.entries(currentProduct.specs || {}).map(([key, value]) => (
-                <div key={key} className="grid grid-cols-1 gap-1 py-4 sm:grid-cols-3 sm:gap-6">
-                  <div className="text-[11px] font-display font-bold uppercase tracking-wider text-gray-500">{key}</div>
-                  <div className="text-sm font-medium text-[#ECECEC] sm:col-span-2">{value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         <aside className="space-y-5 lg:col-span-4">
+          {technicalSpecs.length > 0 && (
+            <div className="border border-white/10 bg-[#0C0C0C] p-6">
+              <div className="mb-5 flex items-center gap-2">
+                <Zap className="h-5 w-5 text-gold-light" />
+                <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">
+                  Thông số kỹ thuật
+                </h2>
+              </div>
+
+              <div className="divide-y divide-white/10">
+                {technicalSpecs.map(([key, value]) => (
+                  <div key={key} className="grid grid-cols-1 gap-1 py-3">
+                    <div className="text-[10px] font-display font-bold uppercase tracking-wider text-gray-500">{key}</div>
+                    <div className="text-sm font-semibold text-[#ECECEC]">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="border border-gold-dark/25 bg-gold-dark/5 p-6">
             <div className="mb-4 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-gold-light" />
@@ -251,8 +288,12 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 href={getProductHref(item.id)}
                 className="group border border-white/10 bg-[#101010] p-4 transition-colors hover:border-gold-dark/50"
               >
-                <div className="aspect-[4/3] bg-black p-3">
-                  <img src={item.image} alt={item.name} className="h-full w-full object-contain transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
+                <div className="aspect-square bg-black p-3">
+                  <ProductPromoImage
+                    src={item.image}
+                    alt={item.name}
+                    imgClassName="h-full w-full object-contain transition-transform group-hover:scale-105"
+                  />
                 </div>
                 <div className="mt-4 flex items-start justify-between gap-3">
                   <div>
@@ -289,6 +330,20 @@ function formatProductDescriptionToHtml(desc: string | undefined): string {
   html = html.replace(/\n/g, "<br />");
 
   return html;
+}
+
+function formatDisplayPrice(price: string | undefined): string {
+  const raw = (price || "").trim();
+  if (!raw) return "";
+
+  const digits = raw.replace(/[^\d]/g, "");
+  const looksLikeMoney = /^[\d\s.,]+(?:đ|₫|vnd)?$/i.test(raw);
+
+  if (digits && looksLikeMoney) {
+    return `${Number(digits).toLocaleString("vi-VN")}đ`;
+  }
+
+  return raw;
 }
 
 function getShortDescription(desc: string | undefined): string {

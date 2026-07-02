@@ -8,8 +8,12 @@ import { useSearchParams, Link } from "react-router-dom";
 import { Search, Eye, Clock, Calendar, ArrowRight, X, Phone, Check, Mail, Send, Sparkles } from "lucide-react";
 import { ARTICLES_DATA } from "../data";
 import { SectionTitle, ArticleCard } from "../components/Cards";
+import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Knowledge() {
+  const { menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/kien-thuc", "/images/kien-thuc.webp");
   const [searchParams, setSearchParams] = useSearchParams();
   const postIdFromUrl = searchParams.get("postId");
 
@@ -83,7 +87,7 @@ export default function Knowledge() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/kien-thuc.webp" 
+            src={bannerImage} 
             alt="Voltara Knowledge Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-80"
             referrerPolicy="no-referrer"

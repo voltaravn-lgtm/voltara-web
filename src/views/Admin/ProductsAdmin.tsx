@@ -4,6 +4,43 @@ import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
 import { Battery, Plus, Edit, Trash2, X, Save, Copy, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon, Link as LinkIcon, List, Eye, Upload, Loader2, Search, LayoutGrid, Rows3, EyeOff } from "lucide-react";
 
+const defaultSpecTemplate: Product["specs"] = {
+  "Công suất tối đa": "",
+  "Trọng lượng thân máy": "",
+  "Động cơ": "",
+  "Kích thước bộ": "",
+  "Điện áp": "",
+  "Mô-men xoắn tối đa": "",
+};
+
+const createBlankProductForm = (id = ""): Partial<Product> => ({
+  id,
+  name: "",
+  voltage: "",
+  capacity: "",
+  brand: "",
+  cellType: "",
+  warranty: "",
+  image: "",
+  images: [],
+  description: "",
+  category: "",
+  price: "",
+  salePrice: "",
+  hidden: false,
+  specs: { ...defaultSpecTemplate },
+});
+
+const markdownImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+
+function getDescriptionImages(description: string | undefined) {
+  return Array.from((description || "").matchAll(markdownImageRegex)).map((match) => ({
+    markdown: match[0],
+    alt: match[1],
+    url: match[2],
+  }));
+}
+
 // Helper to render markdown and layout codes inside product descriptions
 export function formatDescriptionToHtml(desc: string | undefined): string {
   if (!desc) return "";
@@ -51,21 +88,7 @@ export default function ProductsAdmin() {
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productVisibilityFilter, setProductVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   
-  const [productForm, setProductForm] = useState<Partial<Product>>({
-    id: "",
-    name: "",
-    voltage: "",
-    capacity: "",
-    brand: "Voltara",
-    cellType: "LiFePO4 Core",
-    warranty: "12 tháng",
-    image: "/images/voltara_banner.webp",
-    description: "",
-    category: "pin-may-cong-cu",
-    price: "1.200.000đ",
-    hidden: false,
-    specs: {}
-  });
+  const [productForm, setProductForm] = useState<Partial<Product>>(createBlankProductForm());
 
   const [newSpecKey, setNewSpecKey] = useState("");
   const [newSpecValue, setNewSpecValue] = useState("");
@@ -76,27 +99,7 @@ export default function ProductsAdmin() {
       setProductForm({ ...product, images: product.images || [], hidden: product.hidden ?? false });
     } else {
       setEditingProduct(null);
-      setProductForm({
-        id: "VOLTARA-" + Math.floor(Math.random() * 90000 + 10000),
-        name: "",
-        voltage: "12V",
-        capacity: "50Ah",
-        brand: "Voltara Max",
-        cellType: "Pin Lithium Sắt Phosphate (LiFePO4)",
-        warranty: "24 tháng",
-        image: "/images/voltara_banner.webp",
-        images: [],
-        description: "Mô tả sản phẩm bình ắc quy Lithium Voltara chất lượng bộc phát dòng dòng xả lớn.",
-        category: "ac-quy-lithium",
-        price: "2.500.000₫",
-        hidden: false,
-        specs: {
-          "Điện thế danh định": "12.8V",
-          "Dung lượng danh định": "50Ah",
-          "Tuổi thọ thiết kế": "Trên 2000 chu kỳ",
-          "Mạch bảo vệ": "BMS thông minh tích hợp bảo vệ quá dòng"
-        }
-      });
+      setProductForm(createBlankProductForm("VOLTARA-" + Math.floor(Math.random() * 90000 + 10000)));
     }
     setIsProductModalOpen(true);
   };
@@ -239,7 +242,11 @@ export default function ProductsAdmin() {
       }
 
       if (target === "main") {
-        setProductForm(prev => ({ ...prev, image: urls[0] }));
+        setProductForm(prev => ({
+          ...prev,
+          image: urls[0],
+          images: urls.length > 1 ? [...(prev.images || []), ...urls.slice(1)] : prev.images,
+        }));
       }
 
       if (target === "gallery") {
@@ -278,6 +285,30 @@ export default function ProductsAdmin() {
     showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
   };
 
+  const descriptionImages = getDescriptionImages(productForm.description);
+
+  const handleUpdateDescriptionImage = (imageIndex: number, nextUrl: string) => {
+    const images = getDescriptionImages(productForm.description);
+    const target = images[imageIndex];
+    if (!target) return;
+
+    setProductForm(prev => ({
+      ...prev,
+      description: (prev.description || "").replace(target.markdown, `![${target.alt}](${nextUrl})`),
+    }));
+  };
+
+  const handleRemoveDescriptionImage = (imageIndex: number) => {
+    const images = getDescriptionImages(productForm.description);
+    const target = images[imageIndex];
+    if (!target) return;
+
+    setProductForm(prev => ({
+      ...prev,
+      description: (prev.description || "").replace(target.markdown, "").replace(/\n{3,}/g, "\n\n").trim(),
+    }));
+  };
+
   const handleAddSpecItem = () => {
     if (!newSpecKey || !newSpecValue) return;
     setProductForm(prev => ({
@@ -297,6 +328,16 @@ export default function ProductsAdmin() {
       delete copy[key];
       return { ...prev, specs: copy };
     });
+  };
+
+  const handleUpdateSpecValue = (key: string, value: string) => {
+    setProductForm(prev => ({
+      ...prev,
+      specs: {
+        ...(prev.specs || {}),
+        [key]: value,
+      },
+    }));
   };
 
   return (
@@ -405,13 +446,14 @@ export default function ProductsAdmin() {
                   </div>
                   <h3 className="text-xs font-display font-bold text-white uppercase line-clamp-1 leading-snug">{prod.name}</h3>
                   <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                    <span className="text-gray-500 font-bold">{prod.price || "Liên hệ"}</span>
+                    <span className="text-gray-500 font-bold">{prod.salePrice || prod.price || "Liên hệ"}</span>
                     <span className="text-gray-600">/</span>
                     <span className="text-gray-500 font-mono uppercase">{prod.category}</span>
                   </div>
                   {adminViewMode === "grid" && (
                     <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{prod.description}</p>
                   )}
+
                 </div>
               </div>
 
@@ -461,8 +503,8 @@ export default function ProductsAdmin() {
 
       {/* POPUP MODAL */}
       {isProductModalOpen && (
-        <div id="product-admin-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col justify-between">
+        <div id="product-admin-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 lg:p-6 overflow-y-auto">
+          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full max-w-6xl max-h-[92vh] overflow-y-auto shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col justify-between">
             <div className="p-6 border-b border-white/5 flex items-center justify-between">
               <h2 className="text-sm font-display font-black tracking-widest text-[#F5C45A] uppercase flex items-center gap-2">
                 <Battery className="w-4 h-4 text-gold-light" />
@@ -525,11 +567,23 @@ export default function ProductsAdmin() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Nhãn giá tiền hiển thị</label>
+                  <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Giá bán</label>
                   <input
                     type="text"
                     value={productForm.price}
                     onChange={(e) => setProductForm(prev => ({ ...prev, price: e.target.value }))}
+                    placeholder="VD: 600000 hoặc 600.000đ"
+                    className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Giá giảm (nếu có)</label>
+                  <input
+                    type="text"
+                    value={productForm.salePrice}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, salePrice: e.target.value }))}
+                    placeholder="VD: 550000 hoặc 550.000đ"
                     className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
                   />
                 </div>
@@ -541,6 +595,7 @@ export default function ProductsAdmin() {
                     onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}
                     className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none uppercase font-bold"
                   >
+                    <option value="">CHỌN DANH MỤC</option>
                     <option value="pin-may-cong-cu">PIN MÁY CÔNG CỤ</option>
                     <option value="ups-cua-cuon">UPS CỬA CUỐN</option>
                     <option value="pin-xe-dien">PIN XE ĐIỆN</option>
@@ -549,6 +604,28 @@ export default function ProductsAdmin() {
                     <option value="pin-luu-tru-nang-luong">PIN LƯU TRỮ NĂNG LƯỢNG</option>
                     <option value="phu-kien-linh-kien">PHỤ KIỆN & LINH KIỆN</option>
                   </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Cell</label>
+                  <input
+                    type="text"
+                    value={productForm.cellType}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, cellType: e.target.value }))}
+                    placeholder="VD: Pin Lithium Sắt Phosphate (LiFePO4)"
+                    className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Bảo hành</label>
+                  <input
+                    type="text"
+                    value={productForm.warranty}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, warranty: e.target.value }))}
+                    placeholder="VD: 24 tháng"
+                    className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
+                  />
                 </div>
 
                 <label className="col-span-1 sm:col-span-2 flex items-center justify-between gap-4 border border-[#1A1A1A] bg-black/70 px-4 py-3 cursor-pointer">
@@ -577,6 +654,7 @@ export default function ProductsAdmin() {
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         className="sr-only"
                         disabled={Boolean(uploadingImageTarget)}
                         onChange={(e) => {
@@ -791,18 +869,48 @@ export default function ProductsAdmin() {
 
                   {isToolbarPreviewMode ? (
                     <div 
-                      className="w-full bg-black border border-[#1A1A1A] p-4 text-xs leading-relaxed max-h-[160px] min-h-[120px] overflow-y-auto text-gray-300 rounded-md overflow-x-hidden font-sans"
+                      className="w-full bg-black border border-[#1A1A1A] p-4 text-xs leading-relaxed max-h-[360px] min-h-[260px] overflow-y-auto text-gray-300 rounded-md overflow-x-hidden font-sans"
                       dangerouslySetInnerHTML={{ __html: formatDescriptionToHtml(productForm.description) }}
                     />
                   ) : (
                     <textarea
                       id="product-description-textarea"
-                      rows={5}
+                      rows={12}
                       value={productForm.description}
                       onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
                       placeholder="Nhập mô tả kỹ thuật chi tiết của sản phẩm. Bạn có thể bôi đen chữ để bấm căn lề, in đậm, in nghiêng hoặc chèn hình ảnh trên thanh công cụ..."
-                      className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans"
+                      className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans min-h-[260px]"
                     />
+                  )}
+
+                  {descriptionImages.length > 0 && (
+                    <div className="border border-[#1A1A1A] bg-black/60 p-3 space-y-3">
+                      <div className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A]">
+                        Ảnh trong mô tả
+                      </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {descriptionImages.map((image, index) => (
+                          <div key={`${image.url}-${index}`} className="grid grid-cols-[88px_1fr_auto] gap-3 items-center border border-white/10 bg-black p-2">
+                            <div className="w-20 h-16 border border-white/10 bg-[#080808] flex items-center justify-center p-1">
+                              <img src={image.url} alt={image.alt} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" />
+                            </div>
+                            <input
+                              type="text"
+                              value={image.url}
+                              onChange={(e) => handleUpdateDescriptionImage(index, e.target.value)}
+                              className="min-w-0 bg-[#050505] border border-[#1A1A1A] text-[11px] px-3 py-2 text-[#ECECEC] focus:outline-none focus:border-gold-light font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDescriptionImage(index)}
+                              className="px-3 py-2 text-[10px] font-display font-bold uppercase tracking-wider text-red-400 hover:text-white hover:bg-red-500/80 transition-colors"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -838,15 +946,19 @@ export default function ProductsAdmin() {
 
                 <div className="space-y-1.5 pt-2">
                   {Object.entries(productForm.specs || {}).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between bg-black/80 px-3 py-1.5 text-xs text-gray-300 border border-[#1D1D1D]">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase">{key}:</span>
-                        <span>{value}</span>
-                      </div>
+                    <div key={key} className="grid grid-cols-1 sm:grid-cols-[220px_1fr_auto] items-center gap-2 bg-black/80 px-3 py-2 text-xs text-gray-300 border border-[#1D1D1D]">
+                      <span className="text-[10px] text-gray-500 font-bold uppercase">{key}:</span>
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => handleUpdateSpecValue(key, e.target.value)}
+                        placeholder="Nhập giá trị"
+                        className="w-full bg-[#050505] border border-[#1A1A1A] text-xs px-3 py-2 text-[#ECECEC] placeholder:text-gray-700 focus:outline-none focus:border-gold-light"
+                      />
                       <button
                         type="button"
                         onClick={() => handleRemoveSpecItem(key)}
-                        className="text-red-400 hover:text-red-500 text-[10px] uppercase font-bold"
+                        className="justify-self-end text-red-400 hover:text-red-500 text-[10px] uppercase font-bold"
                       >
                         Xóa
                       </button>

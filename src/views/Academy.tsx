@@ -6,47 +6,70 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, Star, Clock, Award, PlayCircle, Users, CheckCircle2, ChevronRight, HelpCircle } from "lucide-react";
-import { COURSES_DATA } from "../data";
-import { SectionTitle, CourseCard } from "../components/Cards";
+import { CourseCard } from "../components/Cards";
 import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Academy() {
-  const { showToast } = useApp();
+  const { showToast, menuItems, academyCourses } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/hoc-vien", "/images/hoc-vien.webp");
   const [activeTab, setActiveTab] = useState("all");
+  const visibleCourses = academyCourses.filter((course) => !course.hidden);
 
   const categories = [
     { id: "all", name: "TẤT CẢ KHÓA HỌC" },
-    { id: "ky-thuat-pin", name: "KỸ THUẬT PIN LITHIUM" },
-    { id: "van-hanh", name: "VẬN HÀNH AN TOÀN" },
-    { id: "ban-hang", name: "KỸ NĂNG BÁN HÀNG & ĐẠI LÝ" }
+    ...Array.from(new Set(visibleCourses.map((course) => course.category))).map((category) => ({
+      id: category,
+      name: category,
+    })),
   ];
 
   const filteredCourses = activeTab === "all"
-    ? COURSES_DATA
-    : COURSES_DATA.filter(c => c.category === activeTab);
+    ? visibleCourses
+    : visibleCourses.filter(c => c.category === activeTab);
 
-  const featuredCourse = COURSES_DATA.find(c => c.rating >= 4.9) || COURSES_DATA[0];
+  const featuredCourse = visibleCourses.find(c => c.rating >= 4.9) || visibleCourses[0];
 
   return (
-    <div id="academy-page" className="pt-10 lg:pt-14 pb-20 relative text-left">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Breadcrumb line navigation */}
-        <div className="flex items-center gap-2 text-xs font-mono tracking-wider text-gray-500 mb-6">
-          <Link to="/" className="hover:text-gold-light">Trang chủ</Link>
-          <span>/</span>
-          <span className="text-gold-dark">Học viện</span>
+    <div id="academy-page" className="pb-20 relative text-left bg-[#050505]">
+      <section className="relative min-h-[45vh] lg:min-h-[55vh] flex items-center overflow-hidden bg-black pt-16 lg:pt-24 pb-16 lg:pb-24 mb-12">
+        <div className="absolute inset-0 z-0 select-none pointer-events-none">
+          <img
+            src={bannerImage}
+            alt="Học viện Voltara"
+            className="w-full h-full object-cover object-center opacity-90"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 lg:from-black/95 lg:via-black/80 lg:to-transparent/25 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-70" />
         </div>
 
-        {/* 1. HERO TITLE BLOCK */}
-        <div className="mb-12 border-b border-white/5 pb-8">
-          <SectionTitle
-            subtitle="VOLTARA POWER ACADEMY"
-            title="HỌC VIỆN ĐÀO TẠO KỸ THUẬT VOLTARA"
-            description="Chương trình huấn luyện đo kiểm sụt dòng xả, lắp ráp đóng vỏ chống nước và chăm sóc khách hàng độc quyền cho đối tác đại lý chính thức."
-            align="left"
-          />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">
+          <div className="flex items-center gap-2 text-xs font-mono tracking-wider text-gray-400 mb-6">
+            <Link to="/" className="hover:text-gold-light transition-colors">Trang chủ</Link>
+            <span>/</span>
+            <span className="text-gold-dark font-black">Học viện</span>
+          </div>
+
+          <div className="max-w-3xl flex flex-col items-start text-left">
+            <span className="text-xs font-display font-black tracking-[0.25em] text-gold-light uppercase mb-2">
+              VOLTARA POWER ACADEMY
+            </span>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black leading-tight text-white uppercase mb-6 glow-text tracking-tight">
+              HỌC VIỆN ĐÀO TẠO <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-light via-gold-dark to-yellow-600">
+                KỸ THUẬT VOLTARA
+              </span>
+            </h1>
+            <div className="h-[2px] bg-gradient-to-r from-gold-dark to-transparent w-28 mb-6" />
+            <p className="text-xs sm:text-sm text-gray-200 leading-relaxed max-w-2xl backdrop-blur-[1px]">
+              Chương trình huấn luyện đo kiểm sụt dòng xả, lắp ráp đóng vỏ chống nước và chăm sóc khách hàng độc quyền cho đối tác đại lý chính thức.
+            </p>
+          </div>
         </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* 2. FEATURED VIDEO COURSE LARGE BANNER HERO (VIDEO CARD CAP / ENROLL CTA) */}
         {featuredCourse && (
@@ -89,7 +112,7 @@ export default function Academy() {
                 </h3>
 
                 <p className="text-xs text-gray-400 leading-relaxed font-sans">
-                  Khóa học chi tiết về thiết kế cấu hình cụm máy sạc Lithium ion cho pin xe điện, kỹ thuật đo điện trở nội cell pin sụt áp và thuật toán viết firmware điều phối mạch quản lý pin BMS an tâm.
+                  {featuredCourse.description || "Khóa học chi tiết về thiết kế cấu hình cụm máy sạc Lithium ion cho pin xe điện, kỹ thuật đo điện trở nội cell pin sụt áp và thuật toán viết firmware điều phối mạch quản lý pin BMS an tâm."}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-300">

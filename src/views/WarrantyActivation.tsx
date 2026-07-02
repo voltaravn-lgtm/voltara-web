@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Check, ClipboardCheck, Loader2, ShieldCheck } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { WarrantyRecord } from "../types";
+import { getMenuBanner } from "../lib/menuBanners";
 
 const inputClass = "w-full bg-black border border-white/10 px-3.5 py-3 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-gold-light";
 
@@ -23,7 +24,8 @@ function addMonths(dateText: string, months: number) {
 }
 
 export default function WarrantyActivation() {
-  const { warranties, addWarranty, showToast } = useApp();
+  const { warranties, addWarranty, showToast, menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/bao-hanh", "/images/bao-hanh.webp");
   const [loading, setLoading] = useState(false);
   const [successSerial, setSuccessSerial] = useState("");
   const [form, setForm] = useState({
@@ -84,7 +86,7 @@ export default function WarrantyActivation() {
     <div className="min-h-screen bg-[#050505] pb-20 text-[#ECECEC]">
       <section className="relative overflow-hidden bg-black pt-28 pb-14">
         <div className="absolute inset-0 opacity-40">
-          <img src="/images/bao-hanh.webp" alt="" className="h-full w-full object-cover" />
+          <img src={bannerImage} alt="" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-black/60" />
         </div>
         <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">

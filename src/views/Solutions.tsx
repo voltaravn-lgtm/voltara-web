@@ -8,8 +8,12 @@ import { Link } from "react-router-dom";
 import { Zap, HelpCircle, Phone, Clock, ShieldCheck, ChevronRight, CheckCircle2, Award, ClipboardList, PenTool, Wrench, Headphones } from "lucide-react";
 import { SOLUTIONS_DATA, PROJECTS_DATA } from "../data";
 import { SectionTitle, SolutionCard } from "../components/Cards";
+import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Solutions() {
+  const { menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/giai-phap", "/images/giai-phap.webp");
   
   const steps = [
     {
@@ -52,7 +56,7 @@ export default function Solutions() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/giai-phap.webp" 
+            src={bannerImage} 
             alt="Voltara Solutions Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-80"
             referrerPolicy="no-referrer"

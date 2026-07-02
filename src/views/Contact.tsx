@@ -10,9 +10,11 @@ import { BRANCHES_DATA } from "../data";
 import { SectionTitle, BranchCard } from "../components/Cards";
 
 import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Contact() {
-  const { addSubmission, contactSettings } = useApp();
+  const { addSubmission, contactSettings, menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/lien-he", "/images/lien-he.webp");
   const [searchParams] = useSearchParams();
   const prepopulatedTitle = searchParams.get("title") || "";
   const prepopulatedType = searchParams.get("type") || "";
@@ -100,7 +102,7 @@ export default function Contact() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/lien-he.webp" 
+            src={bannerImage} 
             alt="Voltara Contact Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-80"
             referrerPolicy="no-referrer"

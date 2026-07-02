@@ -8,8 +8,12 @@ import { Link } from "react-router-dom";
 import { Search, MapPin, Phone, Award, Globe, Shield, ExternalLink, ChevronRight, Check } from "lucide-react";
 import { DEALERS_DATA } from "../data";
 import { SectionTitle } from "../components/Cards";
+import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Dealer() {
+  const { menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/dai-ly", "/images/dai-ly.webp");
   const [selectedProvince, setSelectedProvince] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -30,7 +34,7 @@ export default function Dealer() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/dai-ly.webp" 
+            src={bannerImage} 
             alt="Voltara Dealers Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-80"
             referrerPolicy="no-referrer"

@@ -9,6 +9,21 @@ import { Zap, Award, ShieldCheck, Clock, ChevronRight, Eye, BookOpen, MapPin, Ma
 import { Product, Solution, Article, Course, Job, Branch } from "../types";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
+import ProductPromoImage from "./ProductPromoImage";
+
+function formatDisplayPrice(price: string | undefined): string {
+  const raw = (price || "").trim();
+  if (!raw) return "";
+
+  const digits = raw.replace(/[^\d]/g, "");
+  const looksLikeMoney = /^[\d\s.,]+(?:đ|₫|vnd)?$/i.test(raw);
+
+  if (digits && looksLikeMoney) {
+    return `${Number(digits).toLocaleString("vi-VN")}đ`;
+  }
+
+  return raw;
+}
 
 // Dynamic Section Title block matching Voltara luxurious layout
 export const SectionTitle: React.FC<{
@@ -69,6 +84,10 @@ export const StatCard: React.FC<{
 
 // Premium ProductCard matching the photos
 export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
+  const regularPrice = formatDisplayPrice(product.price);
+  const salePrice = formatDisplayPrice(product.salePrice);
+  const technicalSpecs = Object.entries(product.specs || {}).filter(([, value]) => String(value || "").trim());
+
   return (
     <Link
       to={getProductHref(product.id)}
@@ -85,15 +104,14 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
       </div>
 
       {/* Grid view layout */}
-      <div className="relative w-full aspect-[4/3] bg-[#0A0A0A] overflow-hidden flex items-center justify-center p-4">
+      <div className="relative w-full aspect-square bg-[#0A0A0A] overflow-hidden flex items-center justify-center p-4">
         {/* Soft gold backdrop radial glow */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(216,154,43,0.1)_0%,transparent_70%)] pointer-events-none" />
         
-        <img
+        <ProductPromoImage
           src={product.image}
           alt={product.name}
-          referrerPolicy="no-referrer"
-          className="max-h-[85%] max-w-[85%] object-contain filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500"
+          imgClassName="max-h-[85%] max-w-[85%] object-contain filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500"
         />
       </div>
 
@@ -109,8 +127,21 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
             {product.name}
           </h3>
 
+          <div className="mb-3 min-h-[34px]">
+            {salePrice ? (
+              <div className="space-y-0.5">
+                <div className="text-sm font-display font-black text-gold-light">{salePrice}</div>
+                {regularPrice && <div className="text-[10px] text-gray-500 line-through">{regularPrice}</div>}
+              </div>
+            ) : regularPrice ? (
+              <div className="text-sm font-display font-black text-gold-light">{regularPrice}</div>
+            ) : (
+              <div className="text-xs font-display font-bold uppercase tracking-wider text-gray-500">Liên hệ</div>
+            )}
+          </div>
+
           <div className="space-y-1.5 mb-4">
-            {Object.entries(product.specs).slice(0, 3).map(([key, value]) => (
+            {technicalSpecs.slice(0, 3).map(([key, value]) => (
               <div key={key} className="flex items-center justify-between text-[10px] text-gray-400">
                 <span className="text-gray-500">{key}:</span>
                 <span className="font-medium text-[#C7C7C7]">{value}</span>

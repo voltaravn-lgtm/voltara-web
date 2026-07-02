@@ -17,6 +17,7 @@ export interface Product {
   description: string;
   category: string;
   price?: string;
+  salePrice?: string;
   hidden?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -69,6 +70,10 @@ export interface Course {
   image: string;
   lecturer: string;
   lessonsCount: number;
+  description?: string;
+  hidden?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Job {

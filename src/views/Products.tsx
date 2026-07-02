@@ -10,6 +10,9 @@ import { useApp } from "../context/AppContext";
 import { SectionTitle, ProductCard } from "../components/Cards";
 import QuoteRequestModal from "../components/QuoteRequestModal";
 import { getProductHref } from "../lib/productRoutes";
+import { getMenuBanner } from "../lib/menuBanners";
+import ProductDetailClient from "../components/ProductDetailClient";
+import ProductPromoImage from "../components/ProductPromoImage";
 
 // Helper to render markdown and custom layouts inside descriptions
 function formatDescriptionToHtml(desc: string | undefined): string {
@@ -44,7 +47,8 @@ function formatDescriptionToHtml(desc: string | undefined): string {
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedIdFromUrl = searchParams.get("select");
-  const { products, showToast } = useApp();
+  const { products, showToast, menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/san-pham", "/images/san-pham.webp");
   const visibleProducts = useMemo(() => products.filter(product => !product.hidden), [products]);
 
   const [activeCategory, setActiveCategory] = useState("all");
@@ -82,6 +86,12 @@ export default function Products() {
 
   // Auto detect select from url query
   useEffect(() => {
+    if (!selectedIdFromUrl) {
+      setSelectedProduct(null);
+      setActiveDetailImage("");
+      return;
+    }
+
     if (selectedIdFromUrl) {
       const prod = visibleProducts.find(p => p.id === selectedIdFromUrl);
       if (prod) {
@@ -139,6 +149,20 @@ export default function Products() {
     setIsQuoteModalOpen(true);
   };
 
+  const selectedProductPage = selectedIdFromUrl
+    ? visibleProducts.find(product => product.id === selectedIdFromUrl)
+    : null;
+
+  const selectedProductRelated = selectedProductPage
+    ? visibleProducts
+        .filter(product => product.category === selectedProductPage.category && product.id !== selectedProductPage.id)
+        .slice(0, 3)
+    : [];
+
+  if (selectedProductPage) {
+    return <ProductDetailClient product={selectedProductPage} relatedProducts={selectedProductRelated} />;
+  }
+
   return (
     <div id="products-page" className="pb-20 relative bg-[#050505]">
       
@@ -147,7 +171,7 @@ export default function Products() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/san-pham.webp" 
+            src={bannerImage} 
             alt="Voltara Products Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-80"
             referrerPolicy="no-referrer"
@@ -466,11 +490,11 @@ export default function Products() {
                       to={getProductHref(prod.id)}
                       className="bg-[#111] hover:bg-[#161616] border border-white/5 hover:border-gold-dark/20 p-5 rounded-lg flex flex-col sm:flex-row items-center gap-6 cursor-pointer group transition-all"
                     >
-                      <div className="w-32 h-24 bg-black flex items-center justify-center p-2 border border-white/5 shrink-0 relative">
-                        <img
+                      <div className="w-32 h-32 bg-black flex items-center justify-center p-2 border border-white/5 shrink-0 relative">
+                        <ProductPromoImage
                           src={prod.image}
                           alt={prod.name}
-                          className="max-h-full max-w-full object-contain filter drop-shadow-md"
+                          imgClassName="max-h-full max-w-full object-contain filter drop-shadow-md"
                         />
                       </div>
                       <div className="flex-1 text-left">

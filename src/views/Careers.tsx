@@ -8,8 +8,12 @@ import { Link } from "react-router-dom";
 import { Briefcase, MapPin, DollarSign, Calendar, Upload, FileText, X, Check, ArrowRight, Heart, Users, MessageSquare, Sparkles } from "lucide-react";
 import { JOBS_DATA } from "../data";
 import { SectionTitle } from "../components/Cards";
+import { useApp } from "../context/AppContext";
+import { getMenuBanner } from "../lib/menuBanners";
 
 export default function Careers() {
+  const { menuItems } = useApp();
+  const bannerImage = getMenuBanner(menuItems, "/tuyen-dung", "/images/tuyen-dung.webp");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [appForm, setAppForm] = useState({
@@ -58,7 +62,7 @@ export default function Careers() {
         {/* Full-screen Background Banner Image */}
         <div className="absolute inset-0 z-0 select-none pointer-events-none">
           <img 
-            src="/images/tuyen-dung.webp" 
+            src={bannerImage} 
             alt="Voltara Recruitment Banner Background" 
             className="w-full h-full object-cover object-center transform scale-100 opacity-80"
             referrerPolicy="no-referrer"

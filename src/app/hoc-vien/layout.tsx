@@ -7,7 +7,7 @@ export const metadata: Metadata = buildMetadata({
   description:
     "Chương trình đào tạo kỹ thuật Voltara về pin Lithium, hệ lưu trữ năng lượng, bảo hành và vận hành sản phẩm an toàn.",
   path: "/hoc-vien",
-  image: "/images/trai-dat.webp",
+  image: "/images/hoc-vien.webp",
 });
 
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {

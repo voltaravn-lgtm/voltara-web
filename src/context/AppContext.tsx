@@ -6,14 +6,16 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
-import { Product, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest } from "../types";
-import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA } from "../data";
+import { Product, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course } from "../types";
+import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
 import { auth, db, isFirebaseConfigured } from "../lib/firebase";
 import { isAdminEmail } from "../lib/adminAuth";
 
 export interface MenuItem {
   name: string;
   path: string;
+  hidden?: boolean;
+  bannerImage?: string;
 }
 
 export interface HeroSlide {
@@ -57,6 +59,19 @@ export interface SiteContactSettings {
   tiktokUrl: string;
 }
 
+export interface PromoOverlaySettings {
+  enabled: boolean;
+  imageUrl: string;
+  fileName?: string;
+  endDate?: string;
+  library?: Array<{
+    url: string;
+    fileName: string;
+    createdAt: string;
+  }>;
+  updatedAt?: string;
+}
+
 function sortProductsNewestFirst(items: Product[]) {
   return [...items].sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -68,6 +83,16 @@ function sortProductsNewestFirst(items: Product[]) {
 }
 
 function sortWarrantiesNewestFirst(items: WarrantyRecord[]) {
+  return [...items].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+    if (aTime !== bTime) return bTime - aTime;
+    return String(b.id).localeCompare(String(a.id), "vi");
+  });
+}
+
+function sortCoursesNewestFirst(items: Course[]) {
   return [...items].sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -104,6 +129,8 @@ interface AppContextType {
   setContactSubmissions: React.Dispatch<React.SetStateAction<ContactSubmission[]>>;
   warranties: WarrantyRecord[];
   setWarranties: React.Dispatch<React.SetStateAction<WarrantyRecord[]>>;
+  academyCourses: Course[];
+  setAcademyCourses: React.Dispatch<React.SetStateAction<Course[]>>;
   
   // Dynamic State Modifiers for Easy Administration
   resetToDefault: () => void;
@@ -133,6 +160,11 @@ interface AppContextType {
   updateWarranty: (w: WarrantyRecord) => void;
   deleteWarranty: (id: string) => void;
 
+  // Academy Modifiers
+  addAcademyCourse: (course: Course) => void;
+  updateAcademyCourse: (course: Course) => void;
+  deleteAcademyCourse: (id: string) => void;
+
   // Solutions Modifiers
   addSolution: (sol: Solution) => void;
   updateSolution: (sol: Solution) => void;
@@ -158,6 +190,8 @@ interface AppContextType {
   deleteNewsletterSubscriber: (email: string) => Promise<void>;
   contactSettings: SiteContactSettings;
   updateContactSettings: (settings: SiteContactSettings) => Promise<void>;
+  promoOverlaySettings: PromoOverlaySettings;
+  updatePromoOverlaySettings: (settings: PromoOverlaySettings) => Promise<void>;
 
   // Custom Toast Notification System
   toasts: ToastMessage[];
@@ -167,6 +201,35 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+export const defaultPromoOverlaySettings: PromoOverlaySettings = {
+  enabled: false,
+  imageUrl: "",
+  fileName: "",
+  endDate: "",
+  library: [],
+};
+
+const defaultMenuBannerImages: Record<string, string> = {
+  "/": "/images/voltara_banner.webp",
+  "/gioi-thieu": "/images/voltara_banner.webp",
+  "/san-pham": "/images/san-pham.webp",
+  "/giai-phap": "/images/giai-phap.webp",
+  "/dai-ly": "/images/dai-ly.webp",
+  "/bao-hanh": "/images/bao-hanh.webp",
+  "/hoc-vien": "/images/hoc-vien.webp",
+  "/kien-thuc": "/images/kien-thuc.webp",
+  "/tuyen-dung": "/images/tuyen-dung.webp",
+  "/lien-he": "/images/lien-he.webp",
+};
+
+function withMenuDefaults(item: MenuItem): MenuItem {
+  return {
+    ...item,
+    hidden: item.hidden ?? false,
+    bannerImage: item.bannerImage || defaultMenuBannerImages[item.path] || "",
+  };
+}
+
 const defaultMenuItems: MenuItem[] = [
   { name: "TRANG CHỦ", path: "/" },
   { name: "GIỚI THIỆU", path: "/gioi-thieu" },
@@ -174,10 +237,24 @@ const defaultMenuItems: MenuItem[] = [
   { name: "GIẢI PHÁP", path: "/giai-phap" },
   { name: "ĐẠI LÝ", path: "/dai-ly" },
   { name: "BẢO HÀNH", path: "/bao-hanh" },
+  { name: "HỌC VIỆN", path: "/hoc-vien" },
   { name: "KIẾN THỨC", path: "/kien-thuc" },
   { name: "TUYỂN DỤNG", path: "/tuyen-dung" },
   { name: "LIÊN HỆ", path: "/lien-he" },
-];
+].map(withMenuDefaults);
+
+function restoreMissingMenuItems(items: MenuItem[]) {
+  const hasAcademy = items.some((item) => item.path === "/hoc-vien");
+  if (hasAcademy) return items.map(withMenuDefaults);
+
+  const nextItems = [...items];
+  const warrantyIndex = nextItems.findIndex((item) => item.path === "/bao-hanh");
+  nextItems.splice(warrantyIndex >= 0 ? warrantyIndex + 1 : nextItems.length, 0, {
+    name: "HỌC VIỆN",
+    path: "/hoc-vien",
+  });
+  return nextItems.map(withMenuDefaults);
+}
 
 const defaultHeroSettings: HeroSettings = {
   title: "VOLTARA",
@@ -353,7 +430,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load or Initialize Navigation Menus
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     const saved = localStorage.getItem("voltara_menu_items");
-    return saved ? JSON.parse(saved) : defaultMenuItems;
+    return saved ? restoreMissingMenuItems(JSON.parse(saved)) : defaultMenuItems;
   });
 
   // Load or Initialize Products
@@ -444,6 +521,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : defaultWarranties;
   });
 
+  // Load or Initialize Academy Courses
+  const [academyCourses, setAcademyCourses] = useState<Course[]>(() => {
+    const saved = localStorage.getItem("voltara_academy_courses");
+    return saved ? sortCoursesNewestFirst(JSON.parse(saved)) : sortCoursesNewestFirst(COURSES_DATA);
+  });
+
   // Load or Initialize Quote Requests
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>(() => {
     const saved = localStorage.getItem("voltara_quote_requests");
@@ -455,11 +538,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem("voltara_contact_settings");
     return saved ? { ...defaultContactSettings, ...JSON.parse(saved) } : defaultContactSettings;
   });
+  const [promoOverlaySettings, setPromoOverlaySettings] = useState<PromoOverlaySettings>(() => {
+    const saved = localStorage.getItem("voltara_promo_overlay_settings");
+    return saved ? { ...defaultPromoOverlaySettings, ...JSON.parse(saved) } : defaultPromoOverlaySettings;
+  });
 
   // Toast status state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [canReadAdminData, setCanReadAdminData] = useState(false);
+  const [menuSettingsReady, setMenuSettingsReady] = useState(!isFirebaseConfigured);
   const hasAttemptedProductMigration = useRef(false);
+  const hasAttemptedCourseMigration = useRef(false);
+  const hasSyncedMenuSettings = useRef(!isFirebaseConfigured);
+  const lastMenuSettingsJson = useRef("");
 
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -495,6 +586,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
+    const unsubscribePromoOverlaySettings = onSnapshot(
+      doc(db, "siteSettings", "promoOverlay"),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        setPromoOverlaySettings({ ...defaultPromoOverlaySettings, ...(snapshot.data() as Partial<PromoOverlaySettings>) });
+      },
+      (error) => {
+        console.error("Could not load promo overlay settings from Firestore:", error);
+      }
+    );
+
+    const unsubscribeMenuSettings = onSnapshot(
+      doc(db, "siteSettings", "menu"),
+      (snapshot) => {
+        hasSyncedMenuSettings.current = true;
+        setMenuSettingsReady(true);
+        if (!snapshot.exists()) return;
+
+        const data = snapshot.data() as { items?: MenuItem[] };
+        if (!Array.isArray(data.items)) return;
+
+        const normalizedItems = restoreMissingMenuItems(data.items);
+        lastMenuSettingsJson.current = JSON.stringify(normalizedItems);
+        setMenuItems(normalizedItems);
+      },
+      (error) => {
+        hasSyncedMenuSettings.current = true;
+        setMenuSettingsReady(true);
+        console.error("Could not load menu settings from Firestore:", error);
+      }
+    );
+
     const unsubscribeProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
@@ -522,10 +645,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
+    const unsubscribeAcademyCourses = onSnapshot(
+      collection(db, "academyCourses"),
+      (snapshot) => {
+        if (snapshot.empty) return;
+
+        const items = sortCoursesNewestFirst(snapshot.docs.map((item) => item.data() as Course));
+        setAcademyCourses(items);
+      },
+      (error) => {
+        console.error("Could not load academy courses from Firestore:", error);
+      }
+    );
+
     return () => {
       unsubscribeContactSettings();
+      unsubscribePromoOverlaySettings();
+      unsubscribeMenuSettings();
       unsubscribeProducts();
       unsubscribeWarranties();
+      unsubscribeAcademyCourses();
     };
   }, []);
 
@@ -551,6 +690,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     migrateProductsIfEmpty();
   }, [canReadAdminData, products]);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !canReadAdminData || hasAttemptedCourseMigration.current) return;
+
+    hasAttemptedCourseMigration.current = true;
+
+    const migrateCoursesIfEmpty = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "academyCourses"));
+        if (!snapshot.empty) return;
+
+        const batch = writeBatch(db);
+        academyCourses.forEach((course) => {
+          const nextCourse = {
+            ...course,
+            hidden: course.hidden ?? false,
+            createdAt: course.createdAt || new Date().toISOString(),
+            updatedAt: course.updatedAt || new Date().toISOString(),
+          };
+          batch.set(doc(db, "academyCourses", nextCourse.id), nextCourse);
+        });
+        await batch.commit();
+      } catch (error) {
+        console.error("Could not migrate academy courses to Firestore:", error);
+      }
+    };
+
+    migrateCoursesIfEmpty();
+  }, [academyCourses, canReadAdminData]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !canReadAdminData) return undefined;
@@ -603,8 +771,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Save changes to localStorage whenever states change
   useEffect(() => {
-    localStorage.setItem("voltara_menu_items", JSON.stringify(menuItems));
-  }, [menuItems]);
+    const menuJson = JSON.stringify(menuItems);
+    localStorage.setItem("voltara_menu_items", menuJson);
+
+    if (!isFirebaseConfigured || !canReadAdminData || !menuSettingsReady || !hasSyncedMenuSettings.current) return;
+    if (lastMenuSettingsJson.current === menuJson) return;
+
+    lastMenuSettingsJson.current = menuJson;
+    setDoc(doc(db, "siteSettings", "menu"), {
+      items: menuItems,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true }).catch((error) => {
+      console.error("Could not save menu settings to Firestore:", error);
+      showToast("Không thể lưu cấu hình menu lên Firebase. Vui lòng kiểm tra Firestore rules.", "error");
+    });
+  }, [canReadAdminData, menuItems, menuSettingsReady, showToast]);
 
   useEffect(() => {
     localStorage.setItem("voltara_products", JSON.stringify(products));
@@ -651,12 +832,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [warranties]);
 
   useEffect(() => {
+    localStorage.setItem("voltara_academy_courses", JSON.stringify(academyCourses));
+  }, [academyCourses]);
+
+  useEffect(() => {
     localStorage.setItem("voltara_quote_requests", JSON.stringify(quoteRequests));
   }, [quoteRequests]);
 
   useEffect(() => {
     localStorage.setItem("voltara_contact_settings", JSON.stringify(contactSettings));
   }, [contactSettings]);
+
+  useEffect(() => {
+    localStorage.setItem("voltara_promo_overlay_settings", JSON.stringify(promoOverlaySettings));
+  }, [promoOverlaySettings]);
 
   // Administration Helpers
   const resetToDefault = () => {
@@ -670,11 +859,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setJobs(JOBS_DATA);
       setContactSubmissions([]);
       setWarranties(defaultWarranties);
+      setAcademyCourses(sortCoursesNewestFirst(COURSES_DATA));
       setQuoteRequests(defaultQuoteRequests);
       setHeroSettings(defaultHeroSettings);
       setHomeContent(defaultHomeContent);
       setAboutContent(defaultAboutContent);
       setContactSettings(defaultContactSettings);
+      setPromoOverlaySettings(defaultPromoOverlaySettings);
       localStorage.clear();
       showToast("Đã khôi phục thành công dữ liệu hệ thống!", "success");
     }
@@ -741,13 +932,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateMenuItem = (index: number, updatedItem: MenuItem) => {
     setMenuItems(prev => {
       const copy = [...prev];
-      copy[index] = updatedItem;
+      copy[index] = withMenuDefaults(updatedItem);
       return copy;
     });
   };
 
   const addMenuItem = (item: MenuItem) => {
-    setMenuItems(prev => [...prev, item]);
+    setMenuItems(prev => [...prev, withMenuDefaults(item)]);
   };
 
   const deleteMenuItem = (index: number) => {
@@ -855,6 +1046,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Academy Course Helper Operations
+  const addAcademyCourse = (course: Course) => {
+    const nextCourse = {
+      ...course,
+      hidden: course.hidden ?? false,
+      createdAt: course.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAcademyCourses(prev => {
+      if (prev.some(item => item.id === nextCourse.id)) {
+        showToast("ID khóa học đã tồn tại!", "error");
+        return prev;
+      }
+      return sortCoursesNewestFirst([nextCourse, ...prev]);
+    });
+
+    if (isFirebaseConfigured && !academyCourses.some(item => item.id === nextCourse.id)) {
+      setDoc(doc(db, "academyCourses", nextCourse.id), nextCourse).catch((error) => {
+        console.error("Could not save academy course to Firestore:", error);
+        showToast("Không lưu được khóa học lên Firebase.", "error");
+      });
+    }
+  };
+
+  const updateAcademyCourse = (course: Course) => {
+    const nextCourse = {
+      ...course,
+      hidden: course.hidden ?? false,
+      createdAt: course.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAcademyCourses(prev => sortCoursesNewestFirst(prev.map(item => item.id === nextCourse.id ? nextCourse : item)));
+
+    if (isFirebaseConfigured) {
+      setDoc(doc(db, "academyCourses", nextCourse.id), nextCourse, { merge: true }).catch((error) => {
+        console.error("Could not update academy course in Firestore:", error);
+        showToast("Không cập nhật được khóa học trên Firebase.", "error");
+      });
+    }
+  };
+
+  const deleteAcademyCourse = (id: string) => {
+    setAcademyCourses(prev => prev.filter(item => item.id !== id));
+
+    if (isFirebaseConfigured) {
+      deleteDoc(doc(db, "academyCourses", id)).catch((error) => {
+        console.error("Could not delete academy course from Firestore:", error);
+        showToast("Không xóa được khóa học trên Firebase.", "error");
+      });
+    }
+  };
+
   // Solutions Helper Operations
   const addSolution = (sol: Solution) => {
     setSolutions(prev => [sol, ...prev]);
@@ -951,6 +1196,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updatePromoOverlaySettings = async (settings: PromoOverlaySettings) => {
+    const nextSettings = {
+      ...defaultPromoOverlaySettings,
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    };
+    setPromoOverlaySettings(nextSettings);
+
+    if (isFirebaseConfigured) {
+      await setDoc(doc(db, "siteSettings", "promoOverlay"), nextSettings, { merge: true });
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -978,6 +1236,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setContactSubmissions,
         warranties,
         setWarranties,
+        academyCourses,
+        setAcademyCourses,
         quoteRequests,
         addQuoteRequest,
         updateQuoteRequest,
@@ -987,6 +1247,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteNewsletterSubscriber,
         contactSettings,
         updateContactSettings,
+        promoOverlaySettings,
+        updatePromoOverlaySettings,
         resetToDefault,
         updateProduct,
         addProduct,
@@ -1005,6 +1267,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addWarranty,
         updateWarranty,
         deleteWarranty,
+        addAcademyCourse,
+        updateAcademyCourse,
+        deleteAcademyCourse,
         addSolution,
         updateSolution,
         deleteSolution,

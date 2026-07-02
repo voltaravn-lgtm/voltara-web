@@ -20,6 +20,7 @@ import {
   Check, 
   ChevronRight, 
   Eye, 
+  EyeOff,
   Zap, 
   DollarSign, 
   FileText,
@@ -36,6 +37,7 @@ import HomePageAdmin from "./Admin/HomePageAdmin";
 import AboutPageAdmin from "./Admin/AboutPageAdmin";
 import ProductsAdmin from "./Admin/ProductsAdmin";
 import KnowledgeAdmin from "./Admin/KnowledgeAdmin";
+import AcademyAdmin from "./Admin/AcademyAdmin";
 import RecruitmentAdmin from "./Admin/RecruitmentAdmin";
 import ContactAdmin from "./Admin/ContactAdmin";
 import SolutionsAdmin from "./Admin/SolutionsAdmin";
@@ -66,7 +68,7 @@ export default function Admin() {
     deleteQuoteRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
+  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
 
   // Hero config state & multi-slides control
   const [heroTitle, setHeroTitle] = useState(heroSettings.title);
@@ -152,23 +154,44 @@ export default function Admin() {
   // Menu editing states
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuPath, setNewMenuPath] = useState("");
+  const [newMenuBannerImage, setNewMenuBannerImage] = useState("");
   const [editMenuIdx, setEditMenuIdx] = useState<number | null>(null);
   const [editMenuName, setEditMenuName] = useState("");
   const [editMenuPath, setEditMenuPath] = useState("");
+  const [editMenuBannerImage, setEditMenuBannerImage] = useState("");
+  const [editMenuHidden, setEditMenuHidden] = useState(false);
 
   const handleAddMenu = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMenuName || !newMenuPath) return;
-    addMenuItem({ name: newMenuName.toUpperCase(), path: newMenuPath });
+    addMenuItem({
+      name: newMenuName.toUpperCase(),
+      path: newMenuPath,
+      hidden: false,
+      bannerImage: newMenuBannerImage.trim(),
+    });
     setNewMenuName("");
     setNewMenuPath("");
+    setNewMenuBannerImage("");
   };
 
   const handleSaveEditMenu = (idx: number) => {
     const updated = [...menuItems];
-    updated[idx] = { name: editMenuName.toUpperCase(), path: editMenuPath };
+    updated[idx] = {
+      ...updated[idx],
+      name: editMenuName.toUpperCase(),
+      path: editMenuPath,
+      bannerImage: editMenuBannerImage.trim(),
+      hidden: editMenuHidden,
+    };
     setMenuItems(updated);
     setEditMenuIdx(null);
+  };
+
+  const handleToggleMenuVisibility = (idx: number) => {
+    setMenuItems(prev => prev.map((item, itemIdx) => (
+      itemIdx === idx ? { ...item, hidden: !item.hidden } : item
+    )));
   };
 
   return (
@@ -296,6 +319,22 @@ export default function Admin() {
                 Quản trị Kiến thức
               </span>
               <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "knowledge" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-academy"
+              onClick={() => setActiveTab("academy")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
+                activeTab === "academy"
+                  ? "bg-gold-dark/10 border-gold-light text-gold-light shadow-[0_0_15px_rgba(216,154,43,0.15)]"
+                  : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <BookOpen className="w-4 h-4" />
+                Quản trị Học viện
+              </span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "academy" ? "rotate-90 text-gold-light" : ""}`} />
             </button>
 
             <button
@@ -674,12 +713,12 @@ export default function Admin() {
                     <MenuIcon className="w-4 h-4" />
                     QUẢN LÝ THANH MENU ĐIỀU HƯỚNG ({menuItems.length})
                   </h2>
-                  <p className="text-xs text-gray-400">Thêm, bớt, hoặc thay đổi chữ tiêu đề hiển thị trên header thanh điều hướng (hỗ trợ lưu động).</p>
+                  <p className="text-xs text-gray-400">Thêm, bớt, đổi ảnh banner theo từng trang và bật/tắt mục hiển thị trên thanh điều hướng.</p>
                 </div>
 
                 {/* Form to insert new link */}
                 <form onSubmit={handleAddMenu} className="p-4 bg-black border border-[#1A1A1A] grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                  <div className="md:col-span-4 space-y-1">
+                  <div className="md:col-span-3 space-y-1">
                     <label className="text-[9px] font-display uppercase tracking-wider text-gray-400 block font-bold">Chữ Menu (Ví dụ: "HỌC VIỆN")</label>
                     <input
                       type="text"
@@ -691,7 +730,7 @@ export default function Admin() {
                     />
                   </div>
 
-                  <div className="md:col-span-5 space-y-1">
+                  <div className="md:col-span-3 space-y-1">
                     <label className="text-[9px] font-display uppercase tracking-wider text-gray-400 block font-bold">Đường dẫn Path (Ví dụ: "/hoc-vien")</label>
                     <input
                       type="text"
@@ -703,9 +742,20 @@ export default function Admin() {
                     />
                   </div>
 
+                  <div className="md:col-span-4 space-y-1">
+                    <label className="text-[9px] font-display uppercase tracking-wider text-gray-400 block font-bold">Ảnh banner trang (URL hoặc /images/...)</label>
+                    <input
+                      type="text"
+                      placeholder="/images/hoc-vien.webp"
+                      value={newMenuBannerImage}
+                      onChange={(e) => setNewMenuBannerImage(e.target.value)}
+                      className="w-full bg-[#0A0A0A] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3 py-2 text-xs focus:outline-none font-mono"
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    className="md:col-span-3 w-full bg-[#1A1A1A] hover:bg-gold-dark hover:text-black hover:border-gold-light border border-white/5 text-xs text-[#ECECEC] py-2.5 px-3 font-display font-black tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="md:col-span-2 w-full bg-[#1A1A1A] hover:bg-gold-dark hover:text-black hover:border-gold-light border border-white/5 text-xs text-[#ECECEC] py-2.5 px-3 font-display font-black tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Thêm mục mới
@@ -718,28 +768,71 @@ export default function Admin() {
                   
                   <div className="border border-[#1A1A1A] divide-y divide-[#1A1A1A] bg-black">
                     {menuItems.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3.5 hover:bg-[#0E0E0E] transition-colors leading-none">
+                      <div key={idx} className={`flex flex-col gap-3 p-3.5 hover:bg-[#0E0E0E] transition-colors leading-none lg:flex-row lg:items-center lg:justify-between ${item.hidden ? "opacity-60" : ""}`}>
                         
                         {editMenuIdx === idx ? (
-                          <div className="flex-1 flex flex-col sm:flex-row gap-3 mr-4">
-                            <input
-                              type="text"
-                              value={editMenuName}
-                              onChange={(e) => setEditMenuName(e.target.value)}
-                              className="bg-black border border-gold-dark/40 text-xs px-3 py-1.5 text-white focus:outline-none font-bold"
-                            />
-                            <input
-                              type="text"
-                              value={editMenuPath}
-                              onChange={(e) => setEditMenuPath(e.target.value)}
-                              className="bg-black border border-gold-dark/40 text-xs px-3 py-1.5 text-[#F5C45A] focus:outline-none font-mono"
-                            />
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3 lg:mr-4">
+                            <div className="xl:col-span-3 space-y-1">
+                              <label className="text-[9px] font-display uppercase tracking-wider text-gray-500 font-bold">Tên menu</label>
+                              <input
+                                type="text"
+                                value={editMenuName}
+                                onChange={(e) => setEditMenuName(e.target.value)}
+                                className="w-full bg-black border border-gold-dark/40 text-xs px-3 py-2 text-white focus:outline-none font-bold"
+                              />
+                            </div>
+                            <div className="xl:col-span-3 space-y-1">
+                              <label className="text-[9px] font-display uppercase tracking-wider text-gray-500 font-bold">Đường dẫn</label>
+                              <input
+                                type="text"
+                                value={editMenuPath}
+                                onChange={(e) => setEditMenuPath(e.target.value)}
+                                className="w-full bg-black border border-gold-dark/40 text-xs px-3 py-2 text-[#F5C45A] focus:outline-none font-mono"
+                              />
+                            </div>
+                            <div className="sm:col-span-2 xl:col-span-5 space-y-1">
+                              <label className="text-[9px] font-display uppercase tracking-wider text-gray-500 font-bold">Ảnh banner</label>
+                              <input
+                                type="text"
+                                value={editMenuBannerImage}
+                                onChange={(e) => setEditMenuBannerImage(e.target.value)}
+                                className="w-full bg-black border border-gold-dark/40 text-xs px-3 py-2 text-gray-200 focus:outline-none font-mono"
+                                placeholder="/images/hoc-vien.webp"
+                              />
+                            </div>
+                            <label className="xl:col-span-1 flex items-end gap-2 text-[10px] text-gray-300 uppercase font-display font-bold tracking-wider pb-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!editMenuHidden}
+                                onChange={(e) => setEditMenuHidden(!e.target.checked)}
+                                className="accent-[#D89A2B]"
+                              />
+                              Hiện
+                            </label>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-mono text-gray-500 font-bold">#0{idx + 1}</span>
-                            <span className="text-xs font-display font-black text-[#ECECEC] tracking-wide">{item.name}</span>
-                            <span className="text-[10px] font-mono text-[#D89A2B] bg-[#D89A2B]/10 px-2.5 py-0.5 border border-[#D89A2B]/20">{item.path}</span>
+                          <div className="min-w-0 flex-1 flex items-center gap-3">
+                            <span className="text-xs font-mono text-gray-500 font-bold">#{String(idx + 1).padStart(2, "0")}</span>
+                            {item.bannerImage && (
+                              <img
+                                src={item.bannerImage}
+                                alt=""
+                                className="hidden sm:block w-14 h-9 object-cover border border-white/10 bg-[#050505]"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
+                            <div className="min-w-0 space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-display font-black text-[#ECECEC] tracking-wide">{item.name}</span>
+                                <span className={`text-[9px] font-display font-black uppercase tracking-wider px-2 py-0.5 border ${item.hidden ? "text-gray-400 border-gray-600 bg-gray-500/10" : "text-emerald-300 border-emerald-500/30 bg-emerald-500/10"}`}>
+                                  {item.hidden ? "Đang ẩn" : "Đang hiện"}
+                                </span>
+                                <span className="text-[10px] font-mono text-[#D89A2B] bg-[#D89A2B]/10 px-2.5 py-0.5 border border-[#D89A2B]/20">{item.path}</span>
+                              </div>
+                              {item.bannerImage && (
+                                <p className="text-[10px] font-mono text-gray-500 truncate max-w-[620px] leading-relaxed">{item.bannerImage}</p>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -766,14 +859,30 @@ export default function Admin() {
                                   setEditMenuIdx(idx);
                                   setEditMenuName(item.name);
                                   setEditMenuPath(item.path);
+                                  setEditMenuBannerImage(item.bannerImage || "");
+                                  setEditMenuHidden(!!item.hidden);
                                 }}
                                 className="p-1.5 bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/20 transition-all cursor-pointer"
+                                title="Sửa menu"
                               >
                                 <Edit className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                onClick={() => handleToggleMenuVisibility(idx)}
+                                className={`px-2 py-1.5 border text-[10px] font-display font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  item.hidden
+                                    ? "bg-emerald-500/10 hover:bg-emerald-500 text-emerald-300 hover:text-black border-emerald-500/20"
+                                    : "bg-gray-500/10 hover:bg-gray-500 text-gray-300 hover:text-black border-gray-500/20"
+                                }`}
+                                title={item.hidden ? "Hiện menu" : "Ẩn menu"}
+                              >
+                                {item.hidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                {item.hidden ? "Hiện" : "Ẩn"}
+                              </button>
+                              <button
                                 onClick={() => deleteMenuItem(idx)}
                                 className="p-1.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 transition-all cursor-pointer"
+                                title="Xóa menu"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -803,6 +912,8 @@ export default function Admin() {
 
             {/* T6. KNOWLEDGE/ARTICLES BASE MANAGEMENT */}
             {activeTab === "knowledge" && <KnowledgeAdmin />}
+
+            {activeTab === "academy" && <AcademyAdmin />}
 
             {/* T7. RECRUITMENT/JOBS MANAGEMENT */}
             {activeTab === "recruitment" && <RecruitmentAdmin />}
