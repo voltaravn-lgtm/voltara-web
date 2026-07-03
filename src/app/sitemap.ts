@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
-import { PRODUCTS_DATA } from "../data";
+import { getBuildProducts } from "../lib/productData";
+import { getProductSlug } from "../lib/productRoutes";
 import { siteUrl } from "../lib/seo";
 
 export const dynamic = "force-static";
@@ -18,8 +19,9 @@ const routes = [
   "/lien-he",
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
+  const products = await getBuildProducts();
 
   const pageRoutes = routes.map((route) => ({
     url: new URL(route || "/", siteUrl).toString(),
@@ -28,8 +30,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: route === "" ? 1 : route === "/san-pham" ? 0.9 : 0.7,
   }));
 
-  const productRoutes = PRODUCTS_DATA.map((product) => ({
-    url: new URL(`/san-pham/${product.id}`, siteUrl).toString(),
+  const productRoutes = products.filter((product) => !product.hidden).map((product) => ({
+    url: new URL(`/san-pham/${getProductSlug(product)}`, siteUrl).toString(),
     lastModified,
     changeFrequency: "monthly" as const,
     priority: 0.8,

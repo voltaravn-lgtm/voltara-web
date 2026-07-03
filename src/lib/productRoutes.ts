@@ -1,7 +1,4 @@
-import { PRODUCTS_DATA } from "../data";
 import { Product } from "../types";
-
-const staticProductIds = new Set(PRODUCTS_DATA.map((product) => product.id));
 
 export function slugifyProductText(value: string) {
   return (value || "san-pham")
@@ -24,12 +21,8 @@ export function getProductSlug(product: Product) {
 
 export function getProductHref(product: Product | string) {
   if (typeof product !== "string") {
-    return staticProductIds.has(product.id)
-      ? `/san-pham/${getProductSlug(product)}`
-      : `/san-pham?select=${encodeURIComponent(product.id)}`;
+    return `/san-pham/${getProductSlug(product)}`;
   }
 
-  return staticProductIds.has(product)
-    ? `/san-pham/${product}`
-    : `/san-pham?select=${encodeURIComponent(product)}`;
+  return `/san-pham/${slugifyProductText(product)}`;
 }

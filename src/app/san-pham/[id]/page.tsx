@@ -2,12 +2,9 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Script from "next/script";
 import ProductDetailClient from "../../../components/ProductDetailClient";
-import { PRODUCTS_DATA } from "../../../data";
-import { db, isFirebaseConfigured } from "../../../lib/firebase";
-import { getProductSlug } from "../../../lib/productRoutes";
+import { getBuildProducts } from "../../../lib/productData";
+import { getProductSlug, slugifyProductText } from "../../../lib/productRoutes";
 import { buildMetadata, siteUrl } from "../../../lib/seo";
-import { Product } from "../../../types";
-import { collection, getDocs } from "firebase/firestore";
 
 interface ProductDetailPageProps {
   params: Promise<{
@@ -17,24 +14,14 @@ interface ProductDetailPageProps {
 
 export const dynamicParams = false;
 
-async function getBuildProducts(): Promise<Product[]> {
-  if (!isFirebaseConfigured) return PRODUCTS_DATA;
-
-  try {
-    const snapshot = await getDocs(collection(db, "products"));
-    const remoteProducts = snapshot.docs.map((item) => item.data() as Product);
-    const byId = new Map<string, Product>();
-    [...PRODUCTS_DATA, ...remoteProducts].forEach((product) => byId.set(product.id, product));
-    return Array.from(byId.values());
-  } catch (error) {
-    console.error("Could not load products for static product routes:", error);
-    return PRODUCTS_DATA;
-  }
-}
-
 async function findProductByRoute(id: string) {
   const products = await getBuildProducts();
-  return products.find((item) => item.id === id || getProductSlug(item) === id) || null;
+  const normalizedId = slugifyProductText(id);
+  return products.find((item) =>
+    item.id === id ||
+    slugifyProductText(item.id) === normalizedId ||
+    getProductSlug(item) === normalizedId
+  ) || null;
 }
 
 export async function generateStaticParams() {
@@ -42,7 +29,6 @@ export async function generateStaticParams() {
   const ids = new Set<string>();
 
   products.forEach((product) => {
-    ids.add(product.id);
     ids.add(getProductSlug(product));
   });
 
