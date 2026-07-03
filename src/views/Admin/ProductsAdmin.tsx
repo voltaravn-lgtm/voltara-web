@@ -52,6 +52,83 @@ function getDescriptionImages(description: string | undefined) {
   }));
 }
 
+const allowedDescriptionHtmlTags = new Set([
+  "A",
+  "B",
+  "BR",
+  "DIV",
+  "EM",
+  "I",
+  "LI",
+  "OL",
+  "P",
+  "SPAN",
+  "STRONG",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TH",
+  "THEAD",
+  "TR",
+  "U",
+  "UL",
+]);
+
+function sanitizeDescriptionHtml(html: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  doc.body.querySelectorAll("script, style, meta, link, object, iframe").forEach((node) => node.remove());
+
+  const cleanNode = (node: Node): Node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return document.createTextNode(node.textContent || "");
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return document.createTextNode("");
+    }
+
+    const element = node as HTMLElement;
+    const tagName = element.tagName.toUpperCase();
+
+    if (!allowedDescriptionHtmlTags.has(tagName)) {
+      const fragment = document.createDocumentFragment();
+      Array.from(element.childNodes).forEach((child) => fragment.appendChild(cleanNode(child)));
+      return fragment;
+    }
+
+    const cleanElement = document.createElement(tagName.toLowerCase());
+
+    if (tagName === "A") {
+      const href = element.getAttribute("href") || "";
+      if (/^https?:\/\//i.test(href)) {
+        cleanElement.setAttribute("href", href);
+        cleanElement.setAttribute("target", "_blank");
+        cleanElement.setAttribute("rel", "noopener noreferrer");
+      }
+    }
+
+    if (tagName === "TD" || tagName === "TH") {
+      const colSpan = element.getAttribute("colspan");
+      const rowSpan = element.getAttribute("rowspan");
+      if (colSpan && /^\d+$/.test(colSpan)) cleanElement.setAttribute("colspan", colSpan);
+      if (rowSpan && /^\d+$/.test(rowSpan)) cleanElement.setAttribute("rowspan", rowSpan);
+    }
+
+    Array.from(element.childNodes).forEach((child) => cleanElement.appendChild(cleanNode(child)));
+    return cleanElement;
+  };
+
+  const wrapper = document.createElement("div");
+  Array.from(doc.body.childNodes).forEach((child) => wrapper.appendChild(cleanNode(child)));
+
+  return wrapper.innerHTML
+    .replace(/<p>\s*<\/p>/g, "")
+    .replace(/<div>\s*<\/div>/g, "")
+    .trim();
+}
+
 // Helper to render markdown and layout codes inside product descriptions
 export function formatDescriptionToHtml(desc: string | undefined): string {
   if (!desc) return "";
@@ -304,6 +381,33 @@ export default function ProductsAdmin() {
     showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
   };
 
+  const handleDescriptionPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = event.clipboardData.getData("text/html");
+    if (!html || !/<table[\s>]/i.test(html)) return;
+
+    const textarea = event.currentTarget;
+    const sanitizedHtml = sanitizeDescriptionHtml(html);
+    if (!sanitizedHtml || !/<table[\s>]/i.test(sanitizedHtml)) return;
+
+    event.preventDefault();
+
+    const startPos = textarea.selectionStart;
+    const endPos = textarea.selectionEnd;
+    const currentDescription = productForm.description || "";
+    const before = currentDescription.slice(0, startPos).replace(/\s*$/, "");
+    const after = currentDescription.slice(endPos).replace(/^\s*/, "");
+    const insertion = `${before ? "\n\n" : ""}${sanitizedHtml}${after ? "\n\n" : ""}`;
+    const nextDescription = `${before}${insertion}${after}`;
+
+    setProductForm(prev => ({ ...prev, description: nextDescription }));
+    setTimeout(() => {
+      textarea.focus();
+      const cursorPosition = before.length + insertion.length;
+      textarea.setSelectionRange(cursorPosition, cursorPosition);
+    }, 0);
+    showToast("Da dan bang tu Word vao mo ta.", "success");
+  };
+
   const descriptionImages = getDescriptionImages(productForm.description);
 
   const handleUpdateDescriptionImage = (imageIndex: number, nextUrl: string) => {
@@ -536,7 +640,7 @@ export default function ProductsAdmin() {
                 </div>
                 <div className={`space-y-1 min-w-0 ${adminViewMode === "list" ? "flex-1" : ""}`}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[9px] font-mono text-gold-light tracking-wide bg-gold-dark/10 p-0.5">{prod.voltage} / {prod.capacity}</span>
+                    <span className="text-[9px] font-mono text-gold-light tracking-wide bg-gold-dark/10 p-0.5">{[prod.voltage, prod.capacity].filter(Boolean).join(" / ")}</span>
                     <span className="text-[9px] text-gray-500 font-mono">ID: {prod.id}</span>
                     <span className={`text-[9px] font-display font-bold uppercase px-2 py-0.5 border ${prod.hidden ? "text-gray-400 border-gray-700 bg-gray-900/60" : "text-emerald-400 border-emerald-500/20 bg-emerald-500/10"}`}>
                       {prod.hidden ? "Đang ẩn" : "Đang hiện"}
@@ -657,7 +761,6 @@ export default function ProductsAdmin() {
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Dung lượng (Capacity)</label>
                   <input
                     type="text"
-                    required
                     value={productForm.capacity}
                     onChange={(e) => setProductForm(prev => ({ ...prev, capacity: e.target.value }))}
                     className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
@@ -1080,7 +1183,7 @@ export default function ProductsAdmin() {
 
                   {isToolbarPreviewMode ? (
                     <div 
-                      className="w-full bg-black border border-[#1A1A1A] p-4 text-xs leading-relaxed max-h-[360px] min-h-[260px] overflow-y-auto text-gray-300 rounded-md overflow-x-hidden font-sans"
+                      className="product-description-content w-full bg-black border border-[#1A1A1A] p-4 text-xs leading-relaxed max-h-[360px] min-h-[260px] overflow-y-auto text-gray-300 rounded-md overflow-x-auto font-sans"
                       dangerouslySetInnerHTML={{ __html: formatDescriptionToHtml(productForm.description) }}
                     />
                   ) : (
@@ -1089,6 +1192,7 @@ export default function ProductsAdmin() {
                       rows={12}
                       value={productForm.description}
                       onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                      onPaste={handleDescriptionPaste}
                       placeholder="Nhập mô tả kỹ thuật chi tiết của sản phẩm. Bạn có thể bôi đen chữ để bấm căn lề, in đậm, in nghiêng hoặc chèn hình ảnh trên thanh công cụ..."
                       className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans min-h-[260px]"
                     />

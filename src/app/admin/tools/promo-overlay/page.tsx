@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Download, Eraser, ImagePlus, Layers, Maximize2, Move, Palette, Save, Upload } from "lucide-react";
+import { Calendar, Download, Eraser, ImagePlus, Layers, Maximize2, Move, Palette, Save, Trash2, Upload } from "lucide-react";
 import { useApp } from "../../../../context/AppContext";
 import { isCloudinaryConfigured, uploadImageToCloudinary } from "../../../../lib/cloudinary";
 
@@ -336,6 +336,33 @@ export default function PromoOverlayPage(): React.ReactElement {
     }
   };
 
+  const deleteLibraryOverlay = async (item: { url: string; fileName: string }) => {
+    const confirmed = window.confirm("Xóa khung này khỏi thư viện promo? File gốc trên Cloudinary sẽ không bị xóa.");
+    if (!confirmed) return;
+
+    try {
+      const nextLibrary = (promoOverlaySettings.library || []).filter((libraryItem) => libraryItem.url !== item.url);
+      const isActiveOverlay = promoOverlaySettings.imageUrl === item.url;
+
+      await updatePromoOverlaySettings({
+        ...promoOverlaySettings,
+        enabled: isActiveOverlay ? false : promoOverlaySettings.enabled,
+        imageUrl: isActiveOverlay ? "" : promoOverlaySettings.imageUrl,
+        fileName: isActiveOverlay ? "" : promoOverlaySettings.fileName,
+        library: nextLibrary,
+      });
+
+      if (isActiveOverlay) {
+        setEventEnabled(false);
+      }
+
+      showToast(isActiveOverlay ? "Đã xóa khung khỏi thư viện và tắt overlay đang dùng." : "Đã xóa khung khỏi thư viện promo.", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể xóa khung promo.";
+      showToast(message, "error");
+    }
+  };
+
   const onPointerDown = (event: React.PointerEvent) => {
     if (!activeProduct) return;
     (event.target as Element).setPointerCapture(event.pointerId);
@@ -573,22 +600,35 @@ export default function PromoOverlayPage(): React.ReactElement {
                   </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     {(promoOverlaySettings.library || []).map((item) => (
-                      <button
+                      <div
                         key={item.url}
-                        type="button"
-                        onClick={() => useLibraryOverlay(item)}
                         className={classNames(
-                          "group border bg-black/70 p-2 text-left transition-colors hover:border-gold-light",
+                          "group relative border bg-black/70 p-2 text-left transition-colors hover:border-gold-light",
                           promoOverlaySettings.imageUrl === item.url ? "border-gold-light" : "border-white/10",
                         )}
                       >
-                        <div className="aspect-square bg-[#080808] p-2">
-                          <img src={item.url} alt="" className="h-full w-full object-contain" />
-                        </div>
-                        <div className="mt-2 truncate text-[10px] font-mono text-gray-500 group-hover:text-gold-light">
-                          {item.fileName}
-                        </div>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => useLibraryOverlay(item)}
+                          className="block w-full text-left"
+                        >
+                          <div className="aspect-square bg-[#080808] p-2">
+                            <img src={item.url} alt="" className="h-full w-full object-contain" />
+                          </div>
+                          <div className="mt-2 truncate text-[10px] font-mono text-gray-500 group-hover:text-gold-light">
+                            {item.fileName}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteLibraryOverlay(item)}
+                          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center border border-red-500/30 bg-black/80 text-red-300 opacity-100 transition-colors hover:border-red-400 hover:bg-red-500 hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                          aria-label="Xóa khung promo khỏi thư viện"
+                          title="Xóa khỏi thư viện"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>

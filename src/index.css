@@ -181,3 +181,54 @@ body.day-mode .fixed * {
 .map-glow-dot {
   animation: mapPulse 2s infinite ease-in-out;
 }
+
+.product-description-content {
+  overflow-x: auto;
+}
+
+.product-description-content table {
+  width: 100%;
+  min-width: 560px;
+  margin: 16px 0;
+  border-collapse: collapse;
+  border: 1px solid rgba(245, 196, 90, 0.38);
+  background: rgba(0, 0, 0, 0.24);
+  color: #e5e7eb;
+}
+
+.product-description-content th,
+.product-description-content td {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 7px 10px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.product-description-content th {
+  background: rgba(245, 196, 90, 0.14);
+  color: #f5c45a;
+  font-weight: 800;
+}
+
+.product-description-content tr:first-child td {
+  background: rgba(245, 196, 90, 0.10);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+body.day-mode .product-description-content table {
+  background: #ffffff;
+  color: #111827;
+  border-color: rgba(180, 120, 30, 0.45);
+}
+
+body.day-mode .product-description-content th,
+body.day-mode .product-description-content td {
+  border-color: rgba(17, 24, 39, 0.22);
+}
+
+body.day-mode .product-description-content th,
+body.day-mode .product-description-content tr:first-child td {
+  background: rgba(216, 154, 43, 0.15);
+  color: #111827;
+}

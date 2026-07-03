@@ -120,7 +120,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           {/* Brand/Voltage Tag */}
           <div className="flex flex-col min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between gap-1 text-[9px] sm:text-[10px] text-gray-500 font-display font-semibold mb-2">
             <span className="text-gold-light uppercase tracking-wider">{product.brand}</span>
-            <span>{product.voltage} • {product.capacity}</span>
+            <span>{[product.voltage, product.capacity].filter(Boolean).join(" • ")}</span>
           </div>
 
           <h3 className="text-[11px] sm:text-xs uppercase font-display font-bold text-[#ECECEC] line-clamp-2 tracking-wide leading-relaxed mb-2 sm:mb-3 group-hover:text-gold-light transition-colors">

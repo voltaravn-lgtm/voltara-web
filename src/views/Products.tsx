@@ -107,7 +107,7 @@ export default function Products() {
   // Extract option list dynamically for filters
   const brands = ["all", ...Array.from(new Set(visibleProducts.map(p => p.brand)))];
   const voltages = ["all", ...Array.from(new Set(visibleProducts.map(p => p.voltage)))];
-  const capacities = ["all", ...Array.from(new Set(visibleProducts.map(p => p.capacity)))];
+  const capacities = ["all", ...Array.from(new Set(visibleProducts.map(p => p.capacity).filter((value) => String(value || "").trim())))];
 
   // Filter and sort products
   const filteredProducts = visibleProducts.filter(prod => {
@@ -516,7 +516,7 @@ export default function Products() {
                         <div className="flex items-center gap-3 text-[10px] text-gray-600 mb-1">
                           <span className="text-gold-light font-display uppercase tracking-wider">{prod.brand}</span>
                           <span>•</span>
-                          <span>{prod.voltage} • {prod.capacity}</span>
+                          <span>{[prod.voltage, prod.capacity].filter(Boolean).join(" • ")}</span>
                         </div>
                         <h3 className="text-xs font-display font-extrabold text-[#ECECEC] uppercase mb-2 group-hover:text-gold-light transition-colors">
                           {prod.name}
