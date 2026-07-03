@@ -186,6 +186,12 @@ body.day-mode .fixed * {
   overflow-x: auto;
 }
 
+.product-description-content[contenteditable="true"]:empty::before {
+  content: attr(data-placeholder);
+  color: #6b7280;
+  pointer-events: none;
+}
+
 .product-description-content table {
   width: 100%;
   min-width: 560px;

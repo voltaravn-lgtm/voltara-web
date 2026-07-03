@@ -368,10 +368,38 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
   );
 }
 
+function decodeDescriptionHtml(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ");
+}
+
+function hasDescriptionHtml(value: string): boolean {
+  return /<(p|div|table|tbody|thead|tr|td|th|ul|ol|li|h[1-6]|strong|b|em|i|br|img|a)(\s|>|\/)/i.test(value);
+}
+
+function stripDescriptionHtml(value: string): string {
+  return decodeDescriptionHtml(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
 function formatProductDescriptionToHtml(desc: string | undefined): string {
   if (!desc) return "";
 
-  let html = desc.trim();
+  let html = decodeDescriptionHtml(desc.trim());
+  if (hasDescriptionHtml(html)) return html;
+
   html = html.replace(/!\[(.*?)\]\s*\((.*?)\)/gs, '<img src="$2" alt="$1" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />');
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
   html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
@@ -400,7 +428,9 @@ function formatDisplayPrice(price: string | undefined): string {
 function getShortDescription(desc: string | undefined): string {
   if (!desc) return "";
 
-  return desc
+  const text = hasDescriptionHtml(decodeDescriptionHtml(desc)) ? stripDescriptionHtml(desc) : desc;
+
+  return text
     .replace(/!\[(.*?)\]\s*\((.*?)\)/gs, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")

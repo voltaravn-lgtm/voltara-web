@@ -1,9 +1,14 @@
-import React, { useState } from "react";
-import { useApp } from "../../context/AppContext";
+import React, { useRef, useState } from "react";
+import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
-import { Battery, Plus, Edit, Trash2, X, Save, Copy, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Image as ImageIcon, Link as LinkIcon, List, Eye, Upload, Loader2, Search, LayoutGrid, Rows3, EyeOff, Download } from "lucide-react";
-
+import {
+  Battery, Plus, Edit, Trash2, X, Save, Copy,
+  Bold, Italic,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Image as ImageIcon, Link as LinkIcon, List, Eye, Upload,
+  Loader2, Search, LayoutGrid, Rows3, EyeOff, Download, Undo2, Redo2
+} from "lucide-react";
 const defaultSpecTemplate: Product["specs"] = {
   "Công suất tối đa": "",
   "Trọng lượng thân máy": "",
@@ -25,6 +30,7 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   images: [],
   description: "",
   category: "",
+  subCategory: "",
   price: "",
   salePrice: "",
   sku: "",
@@ -124,16 +130,50 @@ function sanitizeDescriptionHtml(html: string) {
   Array.from(doc.body.childNodes).forEach((child) => wrapper.appendChild(cleanNode(child)));
 
   return wrapper.innerHTML
+    .replace(/&nbsp;/g, " ")
     .replace(/<p>\s*<\/p>/g, "")
     .replace(/<div>\s*<\/div>/g, "")
     .trim();
+}
+
+function slugifyCategoryName(value: string) {
+  return value
+    .trim()
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || `danh-muc-${Date.now()}`;
+}
+
+function makeUniqueCategoryId(baseId: string, existingIds: string[]) {
+  let nextId = baseId;
+  let index = 2;
+  while (existingIds.includes(nextId)) {
+    nextId = `${baseId}-${index}`;
+    index += 1;
+  }
+  return nextId;
 }
 
 // Helper to render markdown and layout codes inside product descriptions
 export function formatDescriptionToHtml(desc: string | undefined): string {
   if (!desc) return "";
   
-  let html = desc;
+  let html = desc
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ");
+
+  if (/<(p|div|table|tbody|thead|tr|td|th|ul|ol|li|h[1-6]|strong|b|em|i|br|img|a)(\s|>|\/)/i.test(html)) {
+    return html;
+  }
   
   // Convert standard markdown bold **text** to <strong>text</strong>
   html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
@@ -162,6 +202,8 @@ export function formatDescriptionToHtml(desc: string | undefined): string {
 export default function ProductsAdmin() {
   const {
     products,
+    productCategories,
+    setProductCategories,
     addProduct,
     updateProduct,
     deleteProduct,
@@ -175,18 +217,115 @@ export default function ProductsAdmin() {
   const [adminViewMode, setAdminViewMode] = useState<"grid" | "list">("grid");
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productVisibilityFilter, setProductVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newChildCategoryNames, setNewChildCategoryNames] = useState<Record<string, string>>({});
   
   const [productForm, setProductForm] = useState<Partial<Product>>(createBlankProductForm());
 
   const [newSpecKey, setNewSpecKey] = useState("");
   const [newSpecValue, setNewSpecValue] = useState("");
+  const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
+  const descriptionSelectionRef = useRef<Range | null>(null);
+  const descriptionDraftRef = useRef("");
+  const activeProductCategory = productCategories.find((category) => category.id === productForm.category);
+  const activeProductSubCategories = (activeProductCategory?.children || []).filter((child) => !child.hidden);
+  const cleanImageUrls = (images: Partial<Product>["images"]) =>
+  (images || [])
+    .map((imageUrl) => String(imageUrl || "").trim())
+    .filter(Boolean);
+
+const galleryImageUrls = cleanImageUrls(productForm.images);
+
+  const getCategoryDisplayName = (categoryId?: string, subCategoryId?: string) => {
+    const category = productCategories.find((item) => item.id === categoryId);
+    const child = category?.children?.find((item) => item.id === subCategoryId);
+    return [category?.name || categoryId, child?.name].filter(Boolean).join(" / ");
+  };
+
+  const handleAddProductCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+
+    setProductCategories((prev) => {
+      const id = makeUniqueCategoryId(slugifyCategoryName(name), prev.map((category) => category.id));
+      return [...prev, { id, name: name.toUpperCase(), children: [] }];
+    });
+    setNewCategoryName("");
+    showToast("Da them danh muc san pham.", "success");
+  };
+
+  const handleUpdateProductCategory = (categoryId: string, updates: Partial<ProductCategory>) => {
+    setProductCategories((prev) =>
+      prev.map((category) => category.id === categoryId ? { ...category, ...updates } : category)
+    );
+  };
+
+  const handleDeleteProductCategory = (categoryId: string) => {
+    const usedCount = products.filter((product) => product.category === categoryId).length;
+    const message = usedCount
+      ? `Danh muc nay dang co ${usedCount} san pham. Xoa danh muc khong xoa san pham, nhung san pham se can gan lai danh muc. Ban van muon xoa?`
+      : "Ban co chac muon xoa danh muc nay?";
+    if (!window.confirm(message)) return;
+    setProductCategories((prev) => prev.filter((category) => category.id !== categoryId));
+  };
+
+  const handleAddChildCategory = (categoryId: string) => {
+    const name = (newChildCategoryNames[categoryId] || "").trim();
+    if (!name) return;
+
+    setProductCategories((prev) =>
+      prev.map((category) => {
+        if (category.id !== categoryId) return category;
+        const children = category.children || [];
+        const id = makeUniqueCategoryId(slugifyCategoryName(name), children.map((child) => child.id));
+        return {
+          ...category,
+          children: [...children, { id, name: name.toUpperCase() }],
+        };
+      })
+    );
+    setNewChildCategoryNames((prev) => ({ ...prev, [categoryId]: "" }));
+    showToast("Da them danh muc con.", "success");
+  };
+
+  const handleUpdateChildCategory = (
+    categoryId: string,
+    childId: string,
+    updates: { name?: string; hidden?: boolean },
+  ) => {
+    setProductCategories((prev) =>
+      prev.map((category) => {
+        if (category.id !== categoryId) return category;
+        return {
+          ...category,
+          children: (category.children || []).map((child) => child.id === childId ? { ...child, ...updates } : child),
+        };
+      })
+    );
+  };
+
+  const handleDeleteChildCategory = (categoryId: string, childId: string) => {
+    const usedCount = products.filter((product) => product.category === categoryId && product.subCategory === childId).length;
+    const message = usedCount
+      ? `Danh muc con nay dang co ${usedCount} san pham. Ban van muon xoa?`
+      : "Ban co chac muon xoa danh muc con nay?";
+    if (!window.confirm(message)) return;
+    setProductCategories((prev) =>
+      prev.map((category) => {
+        if (category.id !== categoryId) return category;
+        return { ...category, children: (category.children || []).filter((child) => child.id !== childId) };
+      })
+    );
+  };
 
   const handleOpenProductModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
+      descriptionDraftRef.current = product.description || "";
       setProductForm({
         ...product,
         images: product.images || [],
+        subCategory: product.subCategory || "",
         hidden: product.hidden ?? false,
         syncChannel: product.syncChannel || (product.haravanProductId || product.haravanVariantId ? "haravan" : ""),
         externalProductId: product.externalProductId || product.haravanProductId || "",
@@ -194,7 +333,9 @@ export default function ProductsAdmin() {
       });
     } else {
       setEditingProduct(null);
-      setProductForm(createBlankProductForm("VOLTARA-" + Math.floor(Math.random() * 90000 + 10000)));
+      const blankForm = createBlankProductForm("VOLTARA-" + Math.floor(Math.random() * 90000 + 10000));
+      descriptionDraftRef.current = blankForm.description || "";
+      setProductForm(blankForm);
     }
     setIsProductModalOpen(true);
   };
@@ -206,7 +347,13 @@ export default function ProductsAdmin() {
       return;
     }
 
-    const currentForm = { ...productForm, hidden: productForm.hidden ?? false } as Product;
+    const currentForm = {
+  ...productForm,
+  images: galleryImageUrls,
+  description: getDescriptionEditorHtml() || productForm.description,
+  subCategory: activeProductSubCategories.length > 0 ? productForm.subCategory || "" : "",
+  hidden: productForm.hidden ?? false,
+} as Product;
 
     if (editingProduct) {
       updateProduct(currentForm);
@@ -254,6 +401,7 @@ export default function ProductsAdmin() {
         prod.id.toLowerCase().includes(normalizedSearchQuery) ||
         (prod.sku || "").toLowerCase().includes(normalizedSearchQuery) ||
         prod.category.toLowerCase().includes(normalizedSearchQuery) ||
+        (prod.subCategory || "").toLowerCase().includes(normalizedSearchQuery) ||
         prod.brand.toLowerCase().includes(normalizedSearchQuery);
       const matchesVisibility =
         productVisibilityFilter === "all" ||
@@ -267,7 +415,173 @@ export default function ProductsAdmin() {
       return bTime - aTime || b.id.localeCompare(a.id);
     });
 
-  const insertFormatting = (type: "bold" | "italic" | "align-left" | "align-center" | "align-right" | "image" | "bullet" | "heading" | "link") => {
+  const cleanDescriptionEditorHtml = (html: string) => {
+    return html
+      .replace(/<p>(?:&nbsp;|\s|<br\s*\/?>)*<\/p>/gi, "")
+      .replace(/<div>(?:&nbsp;|\s|<br\s*\/?>)*<\/div>/gi, "")
+      .replace(/&nbsp;/g, " ")
+      .trim();
+  };
+
+  const getDescriptionEditorHtml = () => {
+    const html = descriptionEditorRef.current?.innerHTML ?? descriptionDraftRef.current ?? "";
+    return cleanDescriptionEditorHtml(html);
+  };
+
+  const getDescriptionEditorDocument = (): Document | null => null;
+
+  const syncDescriptionFromEditor = (commitToState = false) => {
+    const html = getDescriptionEditorHtml();
+    descriptionDraftRef.current = html;
+    if (commitToState) {
+      setProductForm(prev => ({ ...prev, description: html }));
+    }
+    return html;
+  };
+
+  const rememberDescriptionSelection = () => {
+    const editor = descriptionEditorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) {
+      descriptionSelectionRef.current = range.cloneRange();
+    }
+  };
+
+  const restoreDescriptionSelection = () => {
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection || !descriptionSelectionRef.current) return;
+
+    selection.removeAllRanges();
+    selection.addRange(descriptionSelectionRef.current);
+  };
+
+  const insertHtmlIntoDescriptionEditor = (html: string) => {
+    if (!descriptionEditorRef.current) return;
+
+    restoreDescriptionSelection();
+    document.execCommand("insertHTML", false, html);
+    syncDescriptionFromEditor(false);
+    rememberDescriptionSelection();
+  };
+
+  const normalizeDescriptionEditorAfterInput = () => {
+    syncDescriptionFromEditor(false);
+  };
+
+  const insertFormatting = (type: "bold" | "italic" | "align-left" | "align-center" | "align-right" | "align-justify" | "image" | "bullet" | "heading" | "link" | "undo" | "redo") => {
+    if (descriptionEditorRef.current) {
+      restoreDescriptionSelection();
+
+      switch (type) {
+        case "undo":
+          document.execCommand("undo");
+          break;
+        case "redo":
+          document.execCommand("redo");
+          break;
+        case "bold":
+          document.execCommand("bold");
+          break;
+        case "italic":
+          document.execCommand("italic");
+          break;
+        case "align-left":
+          document.execCommand("justifyLeft");
+          break;
+        case "align-center":
+          document.execCommand("justifyCenter");
+          break;
+        case "align-right":
+          document.execCommand("justifyRight");
+          break;
+        case "align-justify":
+  document.execCommand("justifyFull");
+  break;
+        case "bullet":
+          document.execCommand("insertUnorderedList");
+          break;
+        case "heading":
+          document.execCommand("formatBlock", false, "h3");
+          break;
+        case "image": {
+          const url = window.prompt("DÃ¡n URL hÃ¬nh áº£nh cáº§n chÃ¨n:");
+          if (url) {
+            insertHtmlIntoDescriptionEditor(`<img src="${url}" alt="MÃ´ táº£ áº£nh" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
+          }
+          break;
+        }
+        case "link": {
+          const url = window.prompt("DÃ¡n Ä‘Æ°á»ng dáº«n liÃªn káº¿t:", "https://voltara.vn");
+          if (url) document.execCommand("createLink", false, url);
+          break;
+        }
+      }
+
+      syncDescriptionFromEditor(false);
+      rememberDescriptionSelection();
+      return;
+    }
+
+    const doc = getDescriptionEditorDocument();
+    if (doc) {
+      document.body.focus();
+
+      switch (type) {
+        case "undo":
+          doc.execCommand("undo");
+          break;
+        case "redo":
+          doc.execCommand("redo");
+          break;
+        case "bold":
+          doc.execCommand("bold");
+          break;
+        case "italic":
+          doc.execCommand("italic");
+          break;
+        case "align-left":
+          doc.execCommand("justifyLeft");
+          break;
+        case "align-center":
+          doc.execCommand("justifyCenter");
+          break;
+        case "align-right":
+          doc.execCommand("justifyRight");
+          break;
+        case "align-justify":
+  doc.execCommand("justifyFull");
+  break;
+        case "bullet":
+          doc.execCommand("insertUnorderedList");
+          break;
+        case "heading":
+          doc.execCommand("formatBlock", false, "h3");
+          break;
+        case "image": {
+          const url = window.prompt("Dán URL hình ảnh cần chèn:");
+          if (url) {
+            insertHtmlIntoDescriptionEditor(`<img src="${url}" alt="Mô tả ảnh" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
+          }
+          break;
+        }
+        case "link": {
+          const url = window.prompt("Dán đường dẫn liên kết:", "https://voltara.vn");
+          if (url) doc.execCommand("createLink", false, url);
+          break;
+        }
+      }
+
+      normalizeDescriptionEditorAfterInput();
+      return;
+    }
+
     const textarea = document.getElementById("product-description-textarea") as HTMLTextAreaElement;
     if (!textarea) return;
 
@@ -293,6 +607,9 @@ export default function ProductsAdmin() {
       case "align-right":
         replacement = `<div class="text-right">\n${selectedText || "Nội dung căn phải"}\n</div>`;
         break;
+      case "align-justify":
+  replacement = `<div style="text-align: justify;">\n${selectedText || "Nội dung căn đều hai bên"}\n</div>`;
+  break;
       case "image":
         replacement = `\n![Mô tả ảnh](${selectedText || "url_hinh_anh_voltara_banner_v.png"})\n`;
         break;
@@ -315,6 +632,87 @@ export default function ProductsAdmin() {
       textarea.focus();
       textarea.setSelectionRange(startPos + replacement.length, startPos + replacement.length);
     }, 50);
+  };
+
+  const setupDescriptionEditor = () => {
+    const iframe = descriptionEditorRef.current;
+    const doc = getDescriptionEditorDocument();
+    if (!iframe || !doc) return;
+
+    doc.open();
+    doc.write(`<!doctype html>
+      <html>
+        <head>
+          <style>
+            html, body {
+              min-height: 100%;
+              margin: 0;
+              background: #000;
+              color: #ececec;
+              font-family: Arial, sans-serif;
+              font-size: 12px;
+              line-height: 1.7;
+            }
+            body {
+              padding: 12px 14px;
+              outline: none;
+              white-space: normal;
+            }
+            body:empty:before {
+              content: "Nhập hoặc dán mô tả từ Word/Excel vào đây...";
+              color: #6b7280;
+            }
+            p, div { margin: 0 0 8px; }
+            h3 {
+              margin: 12px 0 6px;
+              color: #f5c45a;
+              font-size: 13px;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+            a { color: #f5c45a; }
+            ul, ol { padding-left: 22px; margin: 8px 0; }
+            img {
+              display: block;
+              max-width: 100%;
+              max-height: 420px;
+              object-fit: contain;
+              margin: 12px auto;
+              border: 1px solid rgba(255,255,255,.12);
+              background: #000;
+              padding: 8px;
+            }
+            table {
+              width: 100%;
+              min-width: 560px;
+              margin: 16px 0;
+              border-collapse: collapse;
+              border: 1px solid rgba(245,196,90,.38);
+              background: rgba(0,0,0,.24);
+              color: #e5e7eb;
+            }
+            th, td {
+              border: 1px solid rgba(255,255,255,.22);
+              padding: 7px 10px;
+              vertical-align: top;
+              text-align: left;
+            }
+            th, tr:first-child td {
+              background: rgba(245,196,90,.12);
+              color: #fff;
+              font-weight: 700;
+            }
+          </style>
+        </head>
+        <body contenteditable="true">${descriptionDraftRef.current || productForm.description || ""}</body>
+      </html>`);
+    doc.close();
+    doc.designMode = "on";
+
+    const handleInput = () => normalizeDescriptionEditorAfterInput();
+    const handlePaste = (event: ClipboardEvent) => handleDescriptionPaste(event);
+    doc.body.addEventListener("input", handleInput);
+    doc.body.addEventListener("paste", handlePaste);
   };
 
   const handleCloudinaryUpload = async (
@@ -353,11 +751,18 @@ export default function ProductsAdmin() {
       }
 
       if (target === "description") {
-        const markdownImages = urls.map((url, index) => `![Ảnh sản phẩm ${index + 1}](${url})`).join("\n");
-        setProductForm(prev => ({
-          ...prev,
-          description: prev.description ? `${prev.description}\n${markdownImages}` : markdownImages,
-        }));
+        const imageHtml = urls.map((url, index) => (
+          `<img src="${url}" alt="Ảnh sản phẩm ${index + 1}" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`
+        )).join("");
+
+        if (descriptionEditorRef.current && !isToolbarPreviewMode) {
+          insertHtmlIntoDescriptionEditor(imageHtml);
+        } else {
+          setProductForm(prev => ({
+            ...prev,
+            description: prev.description ? `${prev.description}\n${imageHtml}` : imageHtml,
+          }));
+        }
       }
 
       showToast(`Đã tải ${urls.length} ảnh lên Cloudinary.`, "success");
@@ -372,6 +777,12 @@ export default function ProductsAdmin() {
   const insertImageUrlToDescription = (url: string, alt = "Ảnh sản phẩm") => {
     if (!url.trim()) return;
 
+    if (descriptionEditorRef.current && !isToolbarPreviewMode) {
+      insertHtmlIntoDescriptionEditor(`<img src="${url.trim()}" alt="${alt.replace(/"/g, "&quot;")}" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
+      showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
+      return;
+    }
+
     const markdownImage = `![${alt}](${url.trim()})`;
     setProductForm(prev => ({
       ...prev,
@@ -381,35 +792,95 @@ export default function ProductsAdmin() {
     showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
   };
 
-  const handleDescriptionPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const html = event.clipboardData.getData("text/html");
-    if (!html || !/<table[\s>]/i.test(html)) return;
+  const handleDescriptionPaste = (event: React.ClipboardEvent<HTMLDivElement> | ClipboardEvent) => {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+    const html = clipboardData.getData("text/html");
+    const text = clipboardData.getData("text/plain");
 
-    const textarea = event.currentTarget;
-    const sanitizedHtml = sanitizeDescriptionHtml(html);
-    if (!sanitizedHtml || !/<table[\s>]/i.test(sanitizedHtml)) return;
+    if (html) {
+      const sanitizedHtml = sanitizeDescriptionHtml(html);
+      if (sanitizedHtml) {
+        event.preventDefault();
+        insertHtmlIntoDescriptionEditor(sanitizedHtml);
+        showToast("Da dan noi dung tu Word vao mo ta.", "success");
+      }
+      return;
+    }
+
+    if (!text) return;
+
+    event.preventDefault();
+    const escapedText = text
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((paragraph) => {
+        const div = document.createElement("div");
+        div.textContent = paragraph;
+        return `<p>${div.innerHTML.replace(/\n/g, "<br />")}</p>`;
+      })
+      .join("");
+    insertHtmlIntoDescriptionEditor(escapedText);
+  };
+
+  const extractSpecsFromClipboard = (clipboardData: DataTransfer) => {
+    const html = clipboardData.getData("text/html");
+    const text = clipboardData.getData("text/plain");
+    const rows: Array<[string, string]> = [];
+
+    if (html && /<table[\s>]/i.test(html)) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      doc.querySelectorAll("tr").forEach((row) => {
+        const cells = Array.from(row.querySelectorAll("th,td"))
+          .map((cell) => (cell.textContent || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+        if (cells.length >= 2) rows.push([cells[0], cells.slice(1).join(" ")]);
+      });
+    }
+
+    if (!rows.length && text) {
+      text.split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .forEach((line) => {
+          const cells = line.includes("\t")
+            ? line.split("\t")
+            : line.split(/\s{2,}/);
+          const cleanCells = cells.map((cell) => cell.replace(/\s+/g, " ").trim()).filter(Boolean);
+          if (cleanCells.length >= 2) rows.push([cleanCells[0], cleanCells.slice(1).join(" ")]);
+        });
+    }
+
+    return rows.filter(([key, value]) => {
+      const normalizedKey = key.toLowerCase();
+      const normalizedValue = value.toLowerCase();
+      return key && value && !(normalizedKey.includes("thông số") && normalizedValue.includes("chi tiết"));
+    });
+  };
+
+  const handleSpecsPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const rows = extractSpecsFromClipboard(event.clipboardData);
+    if (!rows.length) return;
 
     event.preventDefault();
 
-    const startPos = textarea.selectionStart;
-    const endPos = textarea.selectionEnd;
-    const currentDescription = productForm.description || "";
-    const before = currentDescription.slice(0, startPos).replace(/\s*$/, "");
-    const after = currentDescription.slice(endPos).replace(/^\s*/, "");
-    const insertion = `${before ? "\n\n" : ""}${sanitizedHtml}${after ? "\n\n" : ""}`;
-    const nextDescription = `${before}${insertion}${after}`;
+    setProductForm(prev => {
+      const nextSpecs = { ...(prev.specs || {}) };
+      rows.forEach(([key, value]) => {
+        nextSpecs[key] = value;
+      });
+      return { ...prev, specs: nextSpecs };
+    });
 
-    setProductForm(prev => ({ ...prev, description: nextDescription }));
-    setTimeout(() => {
-      textarea.focus();
-      const cursorPosition = before.length + insertion.length;
-      textarea.setSelectionRange(cursorPosition, cursorPosition);
-    }, 0);
-    showToast("Da dan bang tu Word vao mo ta.", "success");
+    setNewSpecKey("");
+    setNewSpecValue("");
+    showToast(`Da nhap ${rows.length} thong so tu bang.`, "success");
   };
 
   const descriptionImages = getDescriptionImages(productForm.description);
 
+  
   const handleUpdateDescriptionImage = (imageIndex: number, nextUrl: string) => {
     const images = getDescriptionImages(productForm.description);
     const target = images[imageIndex];
@@ -489,6 +960,7 @@ export default function ProductsAdmin() {
       ["ID", (product) => product.id],
       ["Ten san pham", (product) => product.name],
       ["Danh muc", (product) => product.category],
+      ["Danh muc con", (product) => product.subCategory],
       ["Thuong hieu", (product) => product.brand],
       ["Dien ap", (product) => product.voltage],
       ["Dung luong", (product) => product.capacity],
@@ -550,6 +1022,124 @@ export default function ProductsAdmin() {
           <Plus className="w-4 h-4" />
           Thêm sản phẩm
         </button>
+      </div>
+
+      <div className="border border-gold-dark/20 bg-black/50 p-4 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div>
+            <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Danh muc san pham</h3>
+            <p className="mt-1 text-[10px] text-gray-500">Them, sua, an/xoa danh muc cha va danh muc con. Khi them san pham, neu danh muc cha co danh muc con thi se hien them o chon ben duoi.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[420px]">
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddProductCategory();
+                }
+              }}
+              placeholder="Ten danh muc moi"
+              className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light"
+            />
+            <button
+              type="button"
+              onClick={handleAddProductCategory}
+              className="gold-gradient-bg text-black font-display font-bold px-4 py-2.5 text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Them danh muc
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {productCategories.map((category) => (
+            <div key={category.id} className="border border-white/10 bg-[#070707] p-3 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-center">
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    value={category.name}
+                    onChange={(e) => handleUpdateProductCategory(category.id, { name: e.target.value })}
+                    className="w-full bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white focus:outline-none focus:border-gold-light font-display font-bold uppercase"
+                  />
+                  <div className="text-[9px] text-gray-600 font-mono">ID: {category.id}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateProductCategory(category.id, { hidden: !category.hidden })}
+                  className={`border px-3 py-2 text-[9px] font-display font-bold uppercase tracking-wider ${category.hidden ? "border-gray-700 text-gray-400" : "border-emerald-500/25 text-emerald-400"}`}
+                >
+                  {category.hidden ? "Dang an" : "Dang hien"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteProductCategory(category.id)}
+                  className="border border-red-500/20 bg-red-500/10 px-3 py-2 text-[9px] font-display font-bold uppercase tracking-wider text-red-400 hover:bg-red-500 hover:text-white"
+                >
+                  Xoa
+                </button>
+              </div>
+
+              <div className="space-y-2 border-t border-white/5 pt-3">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={newChildCategoryNames[category.id] || ""}
+                    onChange={(e) => setNewChildCategoryNames((prev) => ({ ...prev, [category.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddChildCategory(category.id);
+                      }
+                    }}
+                    placeholder="Ten danh muc con"
+                    className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-[#ECECEC] focus:outline-none focus:border-gold-light"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddChildCategory(category.id)}
+                    className="border border-gold-dark/40 px-3 py-2 text-[9px] font-display font-bold uppercase tracking-wider text-gold-light hover:border-gold-light"
+                  >
+                    Them con
+                  </button>
+                </div>
+
+                {(category.children || []).length > 0 && (
+                  <div className="space-y-1.5">
+                    {(category.children || []).map((child) => (
+                      <div key={child.id} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-center bg-black/70 border border-white/5 p-2">
+                        <input
+                          type="text"
+                          value={child.name}
+                          onChange={(e) => handleUpdateChildCategory(category.id, child.id, { name: e.target.value })}
+                          className="w-full bg-[#050505] border border-[#1A1A1A] text-[11px] px-3 py-2 text-white focus:outline-none focus:border-gold-light font-display font-bold uppercase"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateChildCategory(category.id, child.id, { hidden: !child.hidden })}
+                          className={`border px-2 py-2 text-[8.5px] font-display font-bold uppercase tracking-wider ${child.hidden ? "border-gray-700 text-gray-400" : "border-emerald-500/25 text-emerald-400"}`}
+                        >
+                          {child.hidden ? "An" : "Hien"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChildCategory(category.id, child.id)}
+                          className="text-red-400 hover:text-white text-[9px] font-display font-bold uppercase"
+                        >
+                          Xoa
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="border border-white/5 bg-black/40 p-4 space-y-4">
@@ -650,7 +1240,7 @@ export default function ProductsAdmin() {
                   <div className="flex flex-wrap items-center gap-2 text-[10px]">
                     <span className="text-gray-500 font-bold">{prod.salePrice || prod.price || "Liên hệ"}</span>
                     <span className="text-gray-600">/</span>
-                    <span className="text-gray-500 font-mono uppercase">{prod.category}</span>
+                    <span className="text-gray-500 font-mono uppercase">{getCategoryDisplayName(prod.category, prod.subCategory)}</span>
                   </div>
                   {adminViewMode === "grid" && (
                     <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{prod.description}</p>
@@ -661,7 +1251,7 @@ export default function ProductsAdmin() {
 
               <div className={`${adminViewMode === "grid" ? "mt-4 pt-3 border-t border-[#1A1A1A] flex items-center justify-between" : "flex items-center justify-end gap-2 shrink-0"}`}>
                 {adminViewMode === "grid" && (
-                  <span className="text-[9px] font-mono text-gray-500 bg-white/5 px-2 py-0.5 font-bold uppercase">{prod.category}</span>
+                  <span className="text-[9px] font-mono text-gray-500 bg-white/5 px-2 py-0.5 font-bold uppercase">{getCategoryDisplayName(prod.category, prod.subCategory)}</span>
                 )}
 
                 <div className="flex items-center gap-2">
@@ -793,19 +1383,33 @@ export default function ProductsAdmin() {
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Danh mục sản phẩm (Category)</label>
                   <select
                     value={productForm.category}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value, subCategory: "" }))}
                     className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none uppercase font-bold"
                   >
                     <option value="">CHỌN DANH MỤC</option>
-                    <option value="pin-may-cong-cu">PIN MÁY CÔNG CỤ</option>
-                    <option value="ups-cua-cuon">UPS CỬA CUỐN</option>
-                    <option value="pin-xe-dien">PIN XE ĐIỆN</option>
-                    <option value="ac-quy-lithium">ẮC QUY LITHIUM</option>
-                    <option value="ac-quy-chi-axit">ẮC QUY CHÌ AXIT</option>
-                    <option value="pin-luu-tru-nang-luong">PIN LƯU TRỮ NĂNG LƯỢNG</option>
-                    <option value="phu-kien-linh-kien">PHỤ KIỆN & LINH KIỆN</option>
+                    {productCategories
+                      .filter((category) => !category.hidden)
+                      .map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
                   </select>
                 </div>
+
+                {activeProductSubCategories.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Danh mục con</label>
+                    <select
+                      value={productForm.subCategory || ""}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, subCategory: e.target.value }))}
+                      className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none uppercase font-bold"
+                    >
+                      <option value="">KHÔNG CHỌN</option>
+                      {activeProductSubCategories.map((child) => (
+                        <option key={child.id} value={child.id}>{child.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Cell</label>
@@ -1021,18 +1625,21 @@ export default function ProductsAdmin() {
                     />
                   </label>
                   <textarea
-                    rows={3}
-                    placeholder="https://example.com/image2.jpg&#10;https://example.com/image3.jpg"
-                    value={productForm.images ? productForm.images.join("\n") : ""}
-                    onChange={(e) => {
-                      const lines = e.target.value.split("\n").map(line => line.trim()).filter(Boolean);
-                      setProductForm(prev => ({ ...prev, images: lines }));
-                    }}
-                    className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none font-mono placeholder:text-gray-700 leading-relaxed"
-                  />
-                  {productForm.images && productForm.images.length > 0 && (
-                    <div className="flex flex-wrap gap-3">
-                      {productForm.images.map((imageUrl, index) => (
+  rows={4}
+  placeholder={"https://example.com/image2.jpg\nhttps://example.com/image3.jpg"}
+  value={(productForm.images || []).join("\n")}
+  onChange={(e) => {
+    const lines = e.target.value.split(/\r?\n/).map((line) => line.trim());
+    setProductForm(prev => ({ ...prev, images: lines }));
+  }}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") e.stopPropagation();
+  }}
+  className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none font-mono placeholder:text-gray-700 leading-relaxed resize-y"
+/>
+                  {galleryImageUrls.length > 0 && (
+  <div className="flex flex-wrap gap-3">
+    {galleryImageUrls.map((imageUrl, index) => (
                         <div key={`${imageUrl}-${index}`} className="space-y-2">
                           <div className="w-20 h-16 bg-black border border-white/10 flex items-center justify-center p-1.5">
                             <img src={imageUrl} alt="" className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" />
@@ -1065,7 +1672,10 @@ export default function ProductsAdmin() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setIsToolbarPreviewMode(true)}
+                        onClick={() => {
+                          syncDescriptionFromEditor(true);
+                          setIsToolbarPreviewMode(true);
+                        }}
                         className={`text-[9.5px] font-display font-bold uppercase py-1 px-2.5 tracking-wider transition-colors cursor-pointer ${isToolbarPreviewMode ? "gold-gradient-bg text-black font-black" : "text-gray-400 hover:text-white"}`}
                       >
                         Xem trước
@@ -1078,6 +1688,28 @@ export default function ProductsAdmin() {
                     <div className="flex flex-wrap items-center gap-1 p-1.5 bg-[#0D0D0D] border border-[#1A1A1A] select-none rounded-md">
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => insertFormatting("undo")}
+                        className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
+                        title="Hoàn tác"
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => insertFormatting("redo")}
+                        className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
+                        title="Làm lại"
+                      >
+                        <Redo2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="w-[1px] h-4 bg-white/10 mx-1" />
+
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("bold")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="In đậm (Bold)"
@@ -1086,6 +1718,7 @@ export default function ProductsAdmin() {
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("italic")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="In nghiêng (Italic)"
@@ -1097,6 +1730,7 @@ export default function ProductsAdmin() {
 
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("heading")}
                         className="px-1.5 py-0.5 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer text-[10px] font-display font-black leading-none uppercase border border-white/5"
                         title="Thêm tiêu đề phụ"
@@ -1105,6 +1739,7 @@ export default function ProductsAdmin() {
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("bullet")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Gạch đầu dòng (List)"
@@ -1116,6 +1751,7 @@ export default function ProductsAdmin() {
 
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("align-left")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Căn lề trái"
@@ -1124,6 +1760,7 @@ export default function ProductsAdmin() {
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("align-center")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Căn lề giữa"
@@ -1132,6 +1769,7 @@ export default function ProductsAdmin() {
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("align-right")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Căn lề phải"
@@ -1139,10 +1777,21 @@ export default function ProductsAdmin() {
                         <AlignRight className="w-3.5 h-3.5" />
                       </button>
 
+                      <button
+  type="button"
+  onMouseDown={(event) => event.preventDefault()}
+  onClick={() => insertFormatting("align-justify")}
+  className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
+  title="Căn đều 2 bên"
+>
+  <AlignJustify className="w-3.5 h-3.5" />
+</button>
+
                       <div className="w-[1px] h-4 bg-white/10 mx-1" />
 
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("image")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Chèn ảnh sinh động dạng URL"
@@ -1172,6 +1821,7 @@ export default function ProductsAdmin() {
                       </label>
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("link")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Chèn liên kết"
@@ -1187,14 +1837,21 @@ export default function ProductsAdmin() {
                       dangerouslySetInnerHTML={{ __html: formatDescriptionToHtml(productForm.description) }}
                     />
                   ) : (
-                    <textarea
-                      id="product-description-textarea"
-                      rows={12}
-                      value={productForm.description}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                    <div
+                      key={`${productForm.id || "new"}-${isProductModalOpen ? "open" : "closed"}`}
+                      ref={descriptionEditorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      data-placeholder="Nhap hoac dan mo ta tu Word/Excel vao day..."
+                      onInput={() => syncDescriptionFromEditor(false)}
+                      onKeyUp={rememberDescriptionSelection}
+                      onMouseUp={rememberDescriptionSelection}
+                      onFocus={rememberDescriptionSelection}
                       onPaste={handleDescriptionPaste}
-                      placeholder="Nhập mô tả kỹ thuật chi tiết của sản phẩm. Bạn có thể bôi đen chữ để bấm căn lề, in đậm, in nghiêng hoặc chèn hình ảnh trên thanh công cụ..."
-                      className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans min-h-[260px]"
+                      title="Trình soạn thảo mô tả sản phẩm"
+                      onBlur={() => syncDescriptionFromEditor(true)}
+                      className="product-description-content w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans min-h-[260px] max-h-[420px] overflow-y-auto overflow-x-auto"
+                      dangerouslySetInnerHTML={{ __html: descriptionDraftRef.current || productForm.description || "" }}
                     />
                   )}
 
@@ -1233,6 +1890,9 @@ export default function ProductsAdmin() {
 
               {/* Dynamic specs builder */}
               <div className="border border-[#1A1A1A] p-4 bg-black/50 space-y-3">
+                <p className="text-[10px] text-gray-500">
+                  Copy bang 2 cot tu Word/Excel roi dan vao o ten thong so hoac gia tri de nhap hang loat.
+                </p>
                 <span className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A] block leading-none">Thông số kỹ thuật đi kèm</span>
                 
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -1241,6 +1901,7 @@ export default function ProductsAdmin() {
                     placeholder="Tên thông số (Vd: Dòng xả liên tục)"
                     value={newSpecKey}
                     onChange={(e) => setNewSpecKey(e.target.value)}
+                    onPaste={handleSpecsPaste}
                     className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white placeholder:text-gray-600 focus:outline-none"
                   />
                   <input
@@ -1248,6 +1909,7 @@ export default function ProductsAdmin() {
                     placeholder="Giá trị (Vd: 35A)"
                     value={newSpecValue}
                     onChange={(e) => setNewSpecValue(e.target.value)}
+                    onPaste={handleSpecsPaste}
                     className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white placeholder:text-gray-600 focus:outline-none"
                   />
                   <button

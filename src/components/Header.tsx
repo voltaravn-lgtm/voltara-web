@@ -5,10 +5,15 @@
 
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Search, ShoppingCart, Sun, Moon } from "lucide-react";
+import { ChevronRight, Menu, X, Search, ShoppingCart, Sun, Moon } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import CartDrawer from "./CartDrawer";
 import { getProductHref } from "../lib/productRoutes";
+
+function getCategoryHref(categoryId: string, subCategoryId?: string) {
+  const query = subCategoryId ? `?sub=${encodeURIComponent(subCategoryId)}` : "";
+  return `/san-pham/danh-muc/${encodeURIComponent(categoryId)}${query}`;
+}
 
 export const VoltaraLogo: React.FC<{ className?: string; iconOnly?: boolean }> = ({ className = "h-8", iconOnly = false }) => {
   const [useImgFallback, setUseImgFallback] = useState(false);
@@ -100,8 +105,9 @@ export default function Header() {
     localStorage.setItem("voltara_display_mode", nextIsDayMode ? "day" : "night");
   };
 
-  const { menuItems, products, articles, openCart, cartCount } = useApp();
+  const { menuItems, productCategories, products, articles, openCart, cartCount } = useApp();
   const visibleMenuItems = menuItems.filter((item) => !item.hidden);
+  const visibleProductCategories = productCategories.filter((category) => !category.hidden);
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const searchResults = normalizedSearch
     ? [
@@ -159,22 +165,56 @@ export default function Header() {
                   : location.pathname.startsWith(item.path);
 
               return (
-                <Link
-                  key={item.path}
-                  id={`nav-item-${item.path}`}
-                  to={item.path}
-                  className={`relative px-1.5 xl:px-3 py-2 text-[10.5px] xl:text-xs font-display font-semibold uppercase tracking-wide xl:tracking-wider transition-colors duration-200 shrink-0 ${
-                    isActive ? "text-gold-light font-bold" : "text-gray-300 hover:text-white"
-                  }`}
-                >
-                  {item.name}
-                  {isActive && (
-                    <span
-                      id={`nav-active-line-${item.name}`}
-                      className="absolute bottom-[-14px] left-0 w-full h-[2px] bg-gradient-to-r from-gold-dark to-gold-light shadow-[0_2px_10px_rgba(245,196,90,0.8)]"
-                    />
+                <div key={item.path} className="group/nav relative shrink-0">
+                  <Link
+                    id={`nav-item-${item.path}`}
+                    to={item.path}
+                    className={`relative block px-1.5 xl:px-3 py-2 text-[10.5px] xl:text-xs font-display font-semibold uppercase tracking-wide xl:tracking-wider transition-colors duration-200 ${
+                      isActive ? "text-gold-light font-bold" : "text-gray-300 hover:text-white"
+                    }`}
+                  >
+                    {item.name}
+                    {isActive && (
+                      <span
+                        id={`nav-active-line-${item.name}`}
+                        className="absolute bottom-[-14px] left-0 w-full h-[2px] bg-gradient-to-r from-gold-dark to-gold-light shadow-[0_2px_10px_rgba(245,196,90,0.8)]"
+                      />
+                    )}
+                  </Link>
+
+                  {item.path === "/san-pham" && visibleProductCategories.length > 0 && (
+                    <div className="invisible absolute left-0 top-full z-50 min-w-[260px] translate-y-3 border border-gold-dark/25 bg-[#070707]/98 p-2 opacity-0 shadow-2xl shadow-black/50 backdrop-blur-md transition-all duration-200 group-hover/nav:visible group-hover/nav:translate-y-0 group-hover/nav:opacity-100">
+                      {visibleProductCategories.map((category) => {
+                        const children = (category.children || []).filter((child) => !child.hidden);
+                        const categoryHref = getCategoryHref(category.id);
+                        return (
+                          <div key={category.id} className="group/category relative">
+                            <Link
+                              to={categoryHref}
+                              className="flex items-center justify-between gap-3 px-3 py-2.5 text-[11px] font-display font-bold uppercase tracking-wider text-gray-300 transition-colors hover:bg-gold-dark/10 hover:text-gold-light"
+                            >
+                              <span>{category.name}</span>
+                              {children.length > 0 && <ChevronRight className="h-3.5 w-3.5 text-gray-500" />}
+                            </Link>
+                            {children.length > 0 && (
+                              <div className="invisible absolute left-full top-0 min-w-[240px] border border-gold-dark/25 bg-[#070707]/98 p-2 opacity-0 shadow-2xl shadow-black/50 transition-all group-hover/category:visible group-hover/category:opacity-100">
+                                {children.map((child) => (
+                                  <Link
+                                    key={child.id}
+                                    to={getCategoryHref(category.id, child.id)}
+                                    className="block px-3 py-2.5 text-[11px] font-display font-bold uppercase tracking-wider text-gray-400 transition-colors hover:bg-gold-dark/10 hover:text-gold-light"
+                                  >
+                                    {child.name}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </Link>
+                </div>
               );
             })}
           </nav>

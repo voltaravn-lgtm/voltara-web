@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { Grid, List, Search, Filter, ShieldCheck, Phone, RefreshCw, X, ShoppingCart, Info, Check, Cpu, Shield, Zap, Leaf } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { SectionTitle, ProductCard } from "../components/Cards";
@@ -16,11 +16,32 @@ import ProductPromoImage from "../components/ProductPromoImage";
 
 const PRODUCTS_PAGE_SIZE = 12;
 
+function getCategoryPath(categoryId: string, subCategoryId = "all") {
+  if (categoryId === "all") return "/san-pham";
+  const query = subCategoryId !== "all" ? `?sub=${encodeURIComponent(subCategoryId)}` : "";
+  return `/san-pham/danh-muc/${encodeURIComponent(categoryId)}${query}`;
+}
+
+function getCategoryFromPath(pathname: string) {
+  const match = pathname.match(/^\/san-pham\/danh-muc\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
 // Helper to render markdown and custom layouts inside descriptions
 function formatDescriptionToHtml(desc: string | undefined): string {
   if (!desc) return "";
   
-  let html = desc;
+  let html = desc
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ");
+
+  if (/<(p|div|table|tbody|thead|tr|td|th|ul|ol|li|h[1-6]|strong|b|em|i|br|img|a)(\s|>|\/)/i.test(html)) {
+    return html;
+  }
   
   // Convert standard markdown bold **text** to <strong>text</strong>
   html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
@@ -48,12 +69,15 @@ function formatDescriptionToHtml(desc: string | undefined): string {
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const selectedIdFromUrl = searchParams.get("select");
-  const { products, showToast, menuItems } = useApp();
+  const { products, showToast, menuItems, productCategories } = useApp();
   const bannerImage = getMenuBanner(menuItems, "/san-pham", "/images/san-pham.webp");
   const visibleProducts = useMemo(() => products.filter(product => !product.hidden), [products]);
 
   const [activeCategory, setActiveCategory] = useState("all");
+  const [activeSubCategory, setActiveSubCategory] = useState("all");
   const [filterBrand, setFilterBrand] = useState("all");
   const [filterVoltage, setFilterVoltage] = useState("all");
   const [filterCapacity, setFilterCapacity] = useState("all");
@@ -69,23 +93,42 @@ export default function Products() {
 
   // Count active filters for badge
   const activeFiltersCount = 
-    (activeCategory !== "all" ? 1 : 0) + 
+    (activeCategory !== "all" ? 1 : 0) +
+    (activeSubCategory !== "all" ? 1 : 0) +
     (filterBrand !== "all" ? 1 : 0) + 
     (filterVoltage !== "all" ? 1 : 0) + 
     (filterCapacity !== "all" ? 1 : 0) +
     (searchQuery ? 1 : 0);
 
-  // Categories list
-  const sidebarCategories = [
-    { id: "all", name: "TẤT CẢ SẢN PHẨM" },
-    { id: "pin-may-cong-cu", name: "PIN MÁY CÔNG CỤ" },
-    { id: "ups-cua-cuon", name: "UPS CỬA CUỐN" },
-    { id: "pin-xe-dien", name: "PIN XE ĐIỆN" },
-    { id: "ac-quy-lithium", name: "ẮC QUY LITHIUM" },
-    { id: "ac-quy-chi-axit", name: "ẮC QUY CHÌ AXIT" },
-    { id: "pin-luu-tru-nang-luong", name: "PIN LƯU TRỮ NĂNG LƯỢNG" },
-    { id: "phu-kien-linh-kien", name: "PHỤ KIỆN & LINH KIỆN" },
-  ];
+  const visibleProductCategories = useMemo(
+    () => productCategories.filter((category) => !category.hidden),
+    [productCategories]
+  );
+  const sidebarCategories = useMemo(
+    () => [{ id: "all", name: "TẤT CẢ SẢN PHẨM", children: [] }, ...visibleProductCategories],
+    [visibleProductCategories]
+  );
+
+  const getCategoryCount = (categoryId: string) =>
+    categoryId === "all" ? visibleProducts.length : visibleProducts.filter((product) => product.category === categoryId).length;
+
+  const getSubCategoryCount = (categoryId: string, subCategoryId: string) =>
+    visibleProducts.filter((product) => product.category === categoryId && product.subCategory === subCategoryId).length;
+
+  const handleSelectCategoryFilter = (categoryId: string, subCategoryId = "all") => {
+    setActiveCategory(categoryId);
+    setActiveSubCategory(subCategoryId);
+    navigate(getCategoryPath(categoryId, subCategoryId));
+  };
+
+  const categoryParamFromUrl = searchParams.get("category");
+  const subCategoryParamFromUrl = searchParams.get("sub");
+  const categoryParamFromPath = getCategoryFromPath(location.pathname);
+
+  useEffect(() => {
+    setActiveCategory(categoryParamFromPath || categoryParamFromUrl || "all");
+    setActiveSubCategory(subCategoryParamFromUrl || "all");
+  }, [categoryParamFromPath, categoryParamFromUrl, subCategoryParamFromUrl]);
 
   // Auto detect select from url query
   useEffect(() => {
@@ -112,13 +155,14 @@ export default function Products() {
   // Filter and sort products
   const filteredProducts = visibleProducts.filter(prod => {
     const matchesCategory = activeCategory === "all" || prod.category === activeCategory;
+    const matchesSubCategory = activeSubCategory === "all" || prod.subCategory === activeSubCategory;
     const matchesBrand = filterBrand === "all" || prod.brand === filterBrand;
     const matchesVoltage = filterVoltage === "all" || prod.voltage === filterVoltage;
     const matchesCapacity = filterCapacity === "all" || prod.capacity === filterCapacity;
     const matchesSearch = prod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           prod.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesCategory && matchesBrand && matchesVoltage && matchesCapacity && matchesSearch;
+    return matchesCategory && matchesSubCategory && matchesBrand && matchesVoltage && matchesCapacity && matchesSearch;
   }).sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -132,7 +176,7 @@ export default function Products() {
 
   useEffect(() => {
     setVisibleProductCount(PRODUCTS_PAGE_SIZE);
-  }, [activeCategory, filterBrand, filterVoltage, filterCapacity, searchQuery, sortBy, viewMode]);
+  }, [activeCategory, activeSubCategory, filterBrand, filterVoltage, filterCapacity, searchQuery, sortBy, viewMode]);
 
   const handleSelectProduct = (product: any) => {
     setSelectedProduct(product);
@@ -152,6 +196,8 @@ export default function Products() {
     setFilterCapacity("all");
     setSearchQuery("");
     setActiveCategory("all");
+    setActiveSubCategory("all");
+    navigate("/san-pham");
   };
 
   const handleRequestQuote = (productName: string) => {
@@ -243,22 +289,48 @@ export default function Products() {
             <div className="bg-[#121212] border border-white/5 p-4 rounded-lg">
               <h4 className="text-[11px] font-display font-bold text-[#ECECEC] uppercase tracking-wider mb-3">Danh Mục Sản Phẩm</h4>
               <div className="flex flex-col gap-1.5 font-display text-[10.5px]">
-                {sidebarCategories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`w-full text-left px-3 py-2.5 transition-all flex items-center justify-between group ${
-                      activeCategory === cat.id
-                        ? "bg-[#D89A2B] text-black font-extrabold"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <span>{cat.name}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-sm ${activeCategory === cat.id ? "bg-black/20 text-black font-bold" : "bg-white/5 text-gray-600"}`}>
-                      {cat.id === "all" ? visibleProducts.length : visibleProducts.filter(p => p.category === cat.id).length}
-                    </span>
-                  </button>
-                ))}
+                {sidebarCategories.map((cat) => {
+                  const children = (cat.children || []).filter((child) => !child.hidden);
+                  const isParentActive = activeCategory === cat.id && activeSubCategory === "all";
+                  return (
+                    <div key={cat.id} className="space-y-1">
+                      <button
+                        onClick={() => handleSelectCategoryFilter(cat.id)}
+                        className={`w-full text-left px-3 py-2.5 transition-all flex items-center justify-between group ${
+                          isParentActive
+                            ? "bg-[#D89A2B] text-black font-extrabold"
+                            : "text-gray-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <span>{cat.name}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-sm ${isParentActive ? "bg-black/20 text-black font-bold" : "bg-white/5 text-gray-600"}`}>
+                          {getCategoryCount(cat.id)}
+                        </span>
+                      </button>
+                      {cat.id !== "all" && children.length > 0 && (
+                        <div className="ml-3 border-l border-white/10 pl-2 space-y-1">
+                          {children.map((child) => {
+                            const isChildActive = activeCategory === cat.id && activeSubCategory === child.id;
+                            return (
+                              <button
+                                key={child.id}
+                                onClick={() => handleSelectCategoryFilter(cat.id, child.id)}
+                                className={`w-full text-left px-3 py-2 transition-all flex items-center justify-between text-[9.5px] ${
+                                  isChildActive
+                                    ? "bg-gold-dark/25 text-gold-light font-extrabold"
+                                    : "text-gray-500 hover:text-white hover:bg-white/5"
+                                }`}
+                              >
+                                <span>{child.name}</span>
+                                <span className="text-[8px] text-gray-600">{getSubCategoryCount(cat.id, child.id)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -821,24 +893,50 @@ export default function Products() {
                   DANH MỤC SẢN PHẨM
                 </h4>
                 <div className="flex flex-col gap-1.5 font-display text-[11px]">
-                  {sidebarCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setActiveCategory(cat.id)}
-                      className={`w-full text-left px-3 py-2.5 transition-all flex items-center justify-between cursor-pointer ${
-                        activeCategory === cat.id
-                          ? "bg-gold-dark text-black font-extrabold"
-                          : "bg-black border border-white/5 text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <span className="truncate pr-1">{cat.name}</span>
-                      <span className={`text-[8px] px-1.5 py-0.5 rounded-sm shrink-0 ${
-                        activeCategory === cat.id ? "bg-black/20 text-black font-bold" : "bg-white/5 text-gray-600"
-                      }`}>
-                        {cat.id === "all" ? visibleProducts.length : visibleProducts.filter(p => p.category === cat.id).length}
-                      </span>
-                    </button>
-                  ))}
+                  {sidebarCategories.map((cat) => {
+                    const children = (cat.children || []).filter((child) => !child.hidden);
+                    const isParentActive = activeCategory === cat.id && activeSubCategory === "all";
+                    return (
+                      <div key={cat.id} className="space-y-1">
+                        <button
+                          onClick={() => handleSelectCategoryFilter(cat.id)}
+                          className={`w-full text-left px-3 py-2.5 transition-all flex items-center justify-between cursor-pointer ${
+                            isParentActive
+                              ? "bg-gold-dark text-black font-extrabold"
+                              : "bg-black border border-white/5 text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          <span className="truncate pr-1">{cat.name}</span>
+                          <span className={`text-[8px] px-1.5 py-0.5 rounded-sm shrink-0 ${
+                            isParentActive ? "bg-black/20 text-black font-bold" : "bg-white/5 text-gray-600"
+                          }`}>
+                            {getCategoryCount(cat.id)}
+                          </span>
+                        </button>
+                        {cat.id !== "all" && children.length > 0 && (
+                          <div className="ml-3 border-l border-white/10 pl-2 space-y-1">
+                            {children.map((child) => {
+                              const isChildActive = activeCategory === cat.id && activeSubCategory === child.id;
+                              return (
+                                <button
+                                  key={child.id}
+                                  onClick={() => handleSelectCategoryFilter(cat.id, child.id)}
+                                  className={`w-full text-left px-3 py-2 transition-all flex items-center justify-between cursor-pointer text-[10px] ${
+                                    isChildActive
+                                      ? "bg-gold-dark/25 text-gold-light font-extrabold"
+                                      : "bg-black border border-white/5 text-gray-500 hover:text-white"
+                                  }`}
+                                >
+                                  <span className="truncate pr-1">{child.name}</span>
+                                  <span className="text-[8px] text-gray-600 shrink-0">{getSubCategoryCount(cat.id, child.id)}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

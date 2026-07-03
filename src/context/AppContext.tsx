@@ -18,6 +18,17 @@ export interface MenuItem {
   bannerImage?: string;
 }
 
+export interface ProductCategory {
+  id: string;
+  name: string;
+  hidden?: boolean;
+  children?: Array<{
+    id: string;
+    name: string;
+    hidden?: boolean;
+  }>;
+}
+
 export interface HeroSlide {
   id: string;
   title: string;
@@ -105,6 +116,8 @@ function sortCoursesNewestFirst(items: Course[]) {
 interface AppContextType {
   menuItems: MenuItem[];
   setMenuItems: React.Dispatch<React.SetStateAction<MenuItem[]>>;
+  productCategories: ProductCategory[];
+  setProductCategories: React.Dispatch<React.SetStateAction<ProductCategory[]>>;
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   solutions: Solution[];
@@ -251,6 +264,16 @@ const defaultMenuItems: MenuItem[] = [
   { name: "TUYỂN DỤNG", path: "/tuyen-dung" },
   { name: "LIÊN HỆ", path: "/lien-he" },
 ].map(withMenuDefaults);
+
+export const defaultProductCategories: ProductCategory[] = [
+  { id: "pin-may-cong-cu", name: "PIN MÁY CÔNG CỤ" },
+  { id: "ups-cua-cuon", name: "UPS CỬA CUỐN" },
+  { id: "pin-xe-dien", name: "PIN XE ĐIỆN" },
+  { id: "ac-quy-lithium", name: "ẮC QUY LITHIUM" },
+  { id: "ac-quy-chi-axit", name: "ẮC QUY CHÌ AXIT" },
+  { id: "pin-luu-tru-nang-luong", name: "PIN LƯU TRỮ NĂNG LƯỢNG" },
+  { id: "phu-kien-linh-kien", name: "PHỤ KIỆN & LINH KIỆN" },
+];
 
 function restoreMissingMenuItems(items: MenuItem[]) {
   const hasAcademy = items.some((item) => item.path === "/hoc-vien");
@@ -442,6 +465,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? restoreMissingMenuItems(JSON.parse(saved)) : defaultMenuItems;
   });
 
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>(() => {
+    const saved = localStorage.getItem("voltara_product_categories");
+    return saved ? JSON.parse(saved) : defaultProductCategories;
+  });
+
   // Load or Initialize Products
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem("voltara_products");
@@ -562,10 +590,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [canReadAdminData, setCanReadAdminData] = useState(false);
   const [menuSettingsReady, setMenuSettingsReady] = useState(!isFirebaseConfigured);
+  const [productCategoriesReady, setProductCategoriesReady] = useState(!isFirebaseConfigured);
   const hasAttemptedProductMigration = useRef(false);
   const hasAttemptedCourseMigration = useRef(false);
   const hasSyncedMenuSettings = useRef(!isFirebaseConfigured);
+  const hasSyncedProductCategories = useRef(!isFirebaseConfigured);
   const lastMenuSettingsJson = useRef("");
+  const lastProductCategoriesJson = useRef("");
 
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -633,6 +664,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
+    const unsubscribeProductCategories = onSnapshot(
+      doc(db, "siteSettings", "productCategories"),
+      (snapshot) => {
+        hasSyncedProductCategories.current = true;
+        setProductCategoriesReady(true);
+        if (!snapshot.exists()) {
+          lastProductCategoriesJson.current = JSON.stringify(productCategories);
+          return;
+        }
+        const data = snapshot.data() as { items?: ProductCategory[] };
+        if (Array.isArray(data.items)) {
+          lastProductCategoriesJson.current = JSON.stringify(data.items);
+          setProductCategories(data.items);
+        }
+      },
+      (error) => {
+        hasSyncedProductCategories.current = true;
+        setProductCategoriesReady(true);
+        console.warn("Could not load product categories from Firestore:", error);
+      }
+    );
+
     const unsubscribeProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
@@ -677,6 +730,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribeContactSettings();
       unsubscribePromoOverlaySettings();
       unsubscribeMenuSettings();
+      unsubscribeProductCategories();
       unsubscribeProducts();
       unsubscribeWarranties();
       unsubscribeAcademyCourses();
@@ -803,6 +857,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [canReadAdminData, menuItems, menuSettingsReady, showToast]);
 
   useEffect(() => {
+    localStorage.setItem("voltara_product_categories", JSON.stringify(productCategories));
+
+    if (!isFirebaseConfigured || !canReadAdminData || !productCategoriesReady || !hasSyncedProductCategories.current) return;
+    const categoriesJson = JSON.stringify(productCategories);
+    if (lastProductCategoriesJson.current === categoriesJson) return;
+
+    lastProductCategoriesJson.current = categoriesJson;
+    setDoc(doc(db, "siteSettings", "productCategories"), {
+      items: productCategories,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true }).catch((error) => {
+      console.warn("Could not save product categories to Firestore:", error);
+    });
+  }, [canReadAdminData, productCategories, productCategoriesReady]);
+
+  useEffect(() => {
     localStorage.setItem("voltara_products", JSON.stringify(products));
   }, [products]);
 
@@ -870,6 +940,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resetToDefault = () => {
     if (window.confirm("Bạn có chắc chắn muốn khôi phục toàn bộ cài đặt về mặc định của Voltara?")) {
       setMenuItems(defaultMenuItems);
+      setProductCategories(defaultProductCategories);
       setProducts(PRODUCTS_DATA);
       setSolutions(SOLUTIONS_DATA);
       setArticles(ARTICLES_DATA);
@@ -1277,6 +1348,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         menuItems,
         setMenuItems,
+        productCategories,
+        setProductCategories,
         products,
         setProducts,
         solutions,
