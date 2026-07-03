@@ -80,8 +80,10 @@ export const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: siteName,
+  alternateName: "Voltara Việt Nam",
   url: siteUrl,
-  logo: new URL("/images/logo-voltara-new.webp", siteUrl).toString(),
+  logo: new URL("/icon-512.png", siteUrl).toString(),
+  image: new URL("/images/logo-voltara-new.webp", siteUrl).toString(),
   email: "voltaravn@gmail.com",
 };
 
