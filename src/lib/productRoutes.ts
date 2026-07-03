@@ -24,7 +24,9 @@ export function getProductSlug(product: Product) {
 
 export function getProductHref(product: Product | string) {
   if (typeof product !== "string") {
-    return `/san-pham/${getProductSlug(product)}`;
+    return staticProductIds.has(product.id)
+      ? `/san-pham/${getProductSlug(product)}`
+      : `/san-pham?select=${encodeURIComponent(product.id)}`;
   }
 
   return staticProductIds.has(product)
