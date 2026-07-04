@@ -67,7 +67,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const allProducts = await getBuildProducts();
   const relatedProducts = allProducts.filter(
     (item) => item.category === product.category && item.id !== product.id,
-  ).slice(0, 3);
+  ).slice(0, 12);
   const productVideos = cleanVideoUrls(product.videoUrls)
     .map((url, index) => getProductVideoEmbed(url, index))
     .filter(Boolean);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Phone, PlayCircle, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import QuoteRequestModal from "./QuoteRequestModal";
 import OrderRequestModal from "./OrderRequestModal";
@@ -26,7 +26,8 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
     sameCategoryProducts.length > 0
       ? sameCategoryProducts
       : productSource.filter((item) => item.id !== currentProduct.id)
-  ).slice(0, 3);
+  ).slice(0, 12);
+  const relatedProductsRef = useRef<HTMLDivElement | null>(null);
 
   const gallery = useMemo(() => {
     const images = [currentProduct.image, ...(currentProduct.images || [])];
@@ -75,6 +76,16 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
     if (gallery.length <= 1) return;
     const nextIndex = activeImageIndex >= gallery.length - 1 ? 0 : activeImageIndex + 1;
     setActiveImage(gallery[nextIndex]);
+  };
+  const scrollRelatedProducts = (direction: "previous" | "next") => {
+    const container = relatedProductsRef.current;
+    if (!container) return;
+
+    const scrollDistance = Math.max(280, Math.floor(container.clientWidth * 0.85));
+    container.scrollBy({
+      left: direction === "next" ? scrollDistance : -scrollDistance,
+      behavior: "smooth",
+    });
   };
 
   useEffect(() => {
@@ -369,17 +380,38 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 Sản phẩm liên quan
               </h2>
             </div>
-            <a href="/san-pham" className="hidden text-[11px] font-display font-bold uppercase tracking-widest text-gold-light hover:text-white sm:inline-flex">
-              Xem tất cả
-            </a>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scrollRelatedProducts("previous")}
+                className="inline-flex h-10 w-10 items-center justify-center border border-white/10 text-gold-light transition-colors hover:border-gold-light hover:text-white"
+                aria-label="Xem sản phẩm liên quan phía trước"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRelatedProducts("next")}
+                className="inline-flex h-10 w-10 items-center justify-center border border-white/10 text-gold-light transition-colors hover:border-gold-light hover:text-white"
+                aria-label="Xem sản phẩm liên quan tiếp theo"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <a href="/san-pham" className="hidden text-[11px] font-display font-bold uppercase tracking-widest text-gold-light hover:text-white sm:inline-flex">
+                Xem tất cả
+              </a>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          <div
+            ref={relatedProductsRef}
+            className="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-3"
+          >
             {currentRelatedProducts.map((item) => (
               <a
                 key={item.id}
                 href={getProductHref(item)}
-                className="group border border-white/10 bg-[#101010] p-4 transition-colors hover:border-gold-dark/50"
+                className="group w-[78vw] shrink-0 snap-start border border-white/10 bg-[#101010] p-4 transition-colors hover:border-gold-dark/50 sm:w-[320px] lg:w-[360px]"
               >
                 <div className="aspect-square bg-black p-3">
                   <ProductPromoImage

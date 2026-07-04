@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
@@ -8,7 +8,7 @@ import {
   Bold, Italic,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Image as ImageIcon, Link as LinkIcon, List, Eye, Upload,
-  Loader2, Search, LayoutGrid, Rows3, EyeOff, Download, Undo2, Redo2
+  Loader2, Search, LayoutGrid, Rows3, EyeOff, Download, Undo2, Redo2, ChevronRight
 } from "lucide-react";
 const defaultSpecTemplate: Product["specs"] = {
   "Công suất tối đa": "",
@@ -215,8 +215,10 @@ export default function ProductsAdmin() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isToolbarPreviewMode, setIsToolbarPreviewMode] = useState(false);
+  const [isQuickImagePanelOpen, setIsQuickImagePanelOpen] = useState(false);
   const [uploadingImageTarget, setUploadingImageTarget] = useState<string | null>(null);
   const [adminViewMode, setAdminViewMode] = useState<"grid" | "list">("grid");
+  const [isCategoryPanelOpen, setIsCategoryPanelOpen] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productVisibilityFilter, setProductVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -232,15 +234,27 @@ export default function ProductsAdmin() {
   const activeProductCategory = productCategories.find((category) => category.id === productForm.category);
   const activeProductSubCategories = (activeProductCategory?.children || []).filter((child) => !child.hidden);
   const cleanImageUrls = (images: Partial<Product>["images"]) =>
-  (images || [])
-    .map((imageUrl) => String(imageUrl || "").trim())
+    (images || [])
+      .map((imageUrl) => String(imageUrl || "").trim())
+      .filter(Boolean);
+
+  const galleryImageUrls = cleanImageUrls(productForm.images);
+  const quickInsertImages = Array.from(new Set([productForm.image, ...galleryImageUrls].filter((imageUrl): imageUrl is string => Boolean(imageUrl))));
+  const productVideoUrls = cleanVideoUrls(productForm.videoUrls);
+  const productVideoEmbeds = productVideoUrls
+    .map((videoUrl, index) => getProductVideoEmbed(videoUrl, index))
     .filter(Boolean);
 
-const galleryImageUrls = cleanImageUrls(productForm.images);
-const productVideoUrls = cleanVideoUrls(productForm.videoUrls);
-const productVideoEmbeds = productVideoUrls
-  .map((videoUrl, index) => getProductVideoEmbed(videoUrl, index))
-  .filter(Boolean);
+  useEffect(() => {
+    if (!isProductModalOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [isProductModalOpen]);
 
   const getCategoryDisplayName = (categoryId?: string, subCategoryId?: string) => {
     const category = productCategories.find((item) => item.id === categoryId);
@@ -1057,12 +1071,30 @@ const productVideoEmbeds = productVideoUrls
       </div>
 
       <div className="border border-gold-dark/20 bg-black/50 p-4 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Danh muc san pham</h3>
-            <p className="mt-1 text-[10px] text-gray-500">Them, sua, an/xoa danh muc cha va danh muc con. Khi them san pham, neu danh muc cha co danh muc con thi se hien them o chon ben duoi.</p>
+            <p className="mt-1 text-[10px] text-gray-500">
+              {productCategories.length} danh muc cha. Mo khi can them, sua, an/xoa danh muc.
+            </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[420px]">
+          <button
+            type="button"
+            onClick={() => setIsCategoryPanelOpen((prev) => !prev)}
+            className="inline-flex items-center justify-center gap-2 border border-gold-dark/35 px-4 py-2.5 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light transition-colors hover:border-gold-light hover:text-white"
+          >
+            {isCategoryPanelOpen ? "Thu gon danh muc" : "Mo danh muc"}
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCategoryPanelOpen ? "rotate-90" : ""}`} />
+          </button>
+        </div>
+
+        {isCategoryPanelOpen && (
+          <>
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-t border-white/5 pt-4">
+              <p className="max-w-xl text-[10px] text-gray-500">
+                Them, sua, an/xoa danh muc cha va danh muc con. Khi them san pham, neu danh muc cha co danh muc con thi se hien them o chon ben duoi.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[420px]">
             <input
               type="text"
               value={newCategoryName}
@@ -1084,8 +1116,8 @@ const productVideoEmbeds = productVideoUrls
               <Plus className="w-3.5 h-3.5" />
               Them danh muc
             </button>
+              </div>
           </div>
-        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {productCategories.map((category) => (
@@ -1172,6 +1204,8 @@ const productVideoEmbeds = productVideoUrls
             </div>
           ))}
         </div>
+          </>
+        )}
       </div>
 
       <div className="border border-white/5 bg-black/40 p-4 space-y-4">
@@ -1327,9 +1361,9 @@ const productVideoEmbeds = productVideoUrls
 
       {/* POPUP MODAL */}
       {isProductModalOpen && (
-        <div id="product-admin-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 lg:p-6 overflow-y-auto">
-          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full max-w-6xl max-h-[92vh] overflow-y-auto shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col justify-between">
-            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+        <div id="product-admin-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 lg:p-6 overflow-hidden">
+          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full max-w-6xl max-h-[92vh] overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
+            <div className="shrink-0 p-6 border-b border-white/5 flex items-center justify-between">
               <h2 className="text-sm font-display font-black tracking-widest text-[#F5C45A] uppercase flex items-center gap-2">
                 <Battery className="w-4 h-4 text-gold-light" />
                 {editingProduct ? "CHỈNH SỬA SẢN PHẨM" : "THÊM SẢN PHẨM MỚI"}
@@ -1342,7 +1376,7 @@ const productVideoEmbeds = productVideoUrls
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
+            <form onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 <div className="space-y-1">
@@ -1691,6 +1725,62 @@ const productVideoEmbeds = productVideoUrls
                   )}
                 </div>
 
+                {/* Dynamic specs builder */}
+                <div className="col-span-1 sm:col-span-2 border border-[#1A1A1A] p-4 bg-black/50 space-y-3">
+                  <p className="text-[10px] text-gray-500">
+                    Copy bang 2 cot tu Word/Excel roi dan vao o ten thong so hoac gia tri de nhap hang loat.
+                  </p>
+                  <span className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A] block leading-none">Thong so ky thuat di kem</span>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      placeholder="Ten thong so (Vd: Dong xa lien tuc)"
+                      value={newSpecKey}
+                      onChange={(e) => setNewSpecKey(e.target.value)}
+                      onPaste={handleSpecsPaste}
+                      className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white placeholder:text-gray-600 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Gia tri (Vd: 35A)"
+                      value={newSpecValue}
+                      onChange={(e) => setNewSpecValue(e.target.value)}
+                      onPaste={handleSpecsPaste}
+                      className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white placeholder:text-gray-600 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSpecItem}
+                      className="bg-gold-dark/20 hover:bg-gold-dark text-gold-light hover:text-black border border-gold-dark/30 text-xs font-display font-black tracking-widest uppercase transition-all px-4 py-2 cursor-pointer"
+                    >
+                      Them thong so
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 pt-2">
+                    {Object.entries(productForm.specs || {}).map(([key, value]) => (
+                      <div key={key} className="grid grid-cols-1 sm:grid-cols-[220px_1fr_auto] items-center gap-2 bg-black/80 px-3 py-2 text-xs text-gray-300 border border-[#1D1D1D]">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase">{key}:</span>
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={(e) => handleUpdateSpecValue(key, e.target.value)}
+                          placeholder="Nhap gia tri"
+                          className="w-full bg-[#050505] border border-[#1A1A1A] text-xs px-3 py-2 text-[#ECECEC] placeholder:text-gray-700 focus:outline-none focus:border-gold-light"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSpecItem(key)}
+                          className="justify-self-end text-red-400 hover:text-red-500 text-[10px] uppercase font-bold"
+                        >
+                          Xoa
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="col-span-1 sm:col-span-2 space-y-2">
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">
                     Video san pham (YouTube hoac link video, moi link mot dong)
@@ -1745,7 +1835,8 @@ const productVideoEmbeds = productVideoUrls
                 </div>
 
                 <div className="col-span-1 sm:col-span-2 space-y-2">
-                  <div className="flex items-center justify-between border-b border-[#1A1A1A] pb-1">
+                  <div className="sticky top-0 z-30 border-b border-[#1A1A1A] bg-[#0A0A0A]/95 pb-2 pt-1 backdrop-blur">
+                  <div className="flex items-center justify-between pb-1">
                     <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">
                       Mô tả chi tiết và Trình soạn thảo
                     </label>
@@ -1879,6 +1970,18 @@ const productVideoEmbeds = productVideoUrls
                       <button
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => setIsQuickImagePanelOpen((prev) => !prev)}
+                        className={`inline-flex items-center gap-1 px-1.5 py-1 text-[9px] font-display font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                          isQuickImagePanelOpen ? "bg-gold-dark text-black" : "text-gray-400 hover:bg-gold-dark/20 hover:text-gold-light"
+                        }`}
+                        title="Mo khay anh co san de chen vao mo ta"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        Anh co san
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertFormatting("image")}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Chèn ảnh sinh động dạng URL"
@@ -1917,10 +2020,38 @@ const productVideoEmbeds = productVideoUrls
                       </button>
                     </div>
                   )}
+                  {!isToolbarPreviewMode && isQuickImagePanelOpen && (
+                    <div className="mt-2 border border-gold-dark/25 bg-black/95 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                      {quickInsertImages.length > 0 ? (
+                        <div className="flex gap-3 overflow-x-auto pb-1">
+                          {quickInsertImages.map((imageUrl, index) => (
+                            <div key={`${imageUrl}-${index}`} className="w-24 shrink-0 space-y-2">
+                              <div className="h-20 w-24 border border-white/10 bg-[#080808] p-1.5">
+                                <img src={imageUrl} alt="" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                              </div>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => insertImageUrlToDescription(imageUrl, `${productForm.name || "Anh san pham"} ${index + 1}`)}
+                                className="w-full border border-white/10 px-2 py-1.5 text-[8.5px] font-display font-bold uppercase tracking-wider text-gray-300 transition-colors hover:border-gold-light hover:text-gold-light"
+                              >
+                                Chen
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-gray-500">
+                          Chua co anh dai dien hoac anh bo sung de chen nhanh.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  </div>
 
                   {isToolbarPreviewMode ? (
                     <div 
-                      className="product-description-content w-full bg-black border border-[#1A1A1A] p-4 text-xs leading-relaxed max-h-[360px] min-h-[260px] overflow-y-auto text-gray-300 rounded-md overflow-x-auto font-sans"
+                      className="product-description-content w-full bg-black border border-[#1A1A1A] p-4 text-xs leading-relaxed min-h-[260px] text-gray-300 rounded-md font-sans"
                       dangerouslySetInnerHTML={{ __html: formatDescriptionToHtml(productForm.description) }}
                     />
                   ) : (
@@ -1937,7 +2068,7 @@ const productVideoEmbeds = productVideoUrls
                       onPaste={handleDescriptionPaste}
                       title="Trình soạn thảo mô tả sản phẩm"
                       onBlur={() => syncDescriptionFromEditor(true)}
-                      className="product-description-content w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans min-h-[260px] max-h-[420px] overflow-y-auto overflow-x-auto"
+                      className="product-description-content w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none focus:border-gold-light leading-relaxed font-sans min-h-[260px]"
                       dangerouslySetInnerHTML={{ __html: descriptionDraftRef.current || productForm.description || "" }}
                     />
                   )}
@@ -1973,62 +2104,6 @@ const productVideoEmbeds = productVideoUrls
                   )}
                 </div>
 
-              </div>
-
-              {/* Dynamic specs builder */}
-              <div className="border border-[#1A1A1A] p-4 bg-black/50 space-y-3">
-                <p className="text-[10px] text-gray-500">
-                  Copy bang 2 cot tu Word/Excel roi dan vao o ten thong so hoac gia tri de nhap hang loat.
-                </p>
-                <span className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A] block leading-none">Thông số kỹ thuật đi kèm</span>
-                
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    type="text"
-                    placeholder="Tên thông số (Vd: Dòng xả liên tục)"
-                    value={newSpecKey}
-                    onChange={(e) => setNewSpecKey(e.target.value)}
-                    onPaste={handleSpecsPaste}
-                    className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white placeholder:text-gray-600 focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Giá trị (Vd: 35A)"
-                    value={newSpecValue}
-                    onChange={(e) => setNewSpecValue(e.target.value)}
-                    onPaste={handleSpecsPaste}
-                    className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-white placeholder:text-gray-600 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddSpecItem}
-                    className="bg-gold-dark/20 hover:bg-gold-dark text-gold-light hover:text-black border border-gold-dark/30 text-xs font-display font-black tracking-widest uppercase transition-all px-4 py-2 cursor-pointer"
-                  >
-                    Thêm thông số
-                  </button>
-                </div>
-
-                <div className="space-y-1.5 pt-2">
-                  {Object.entries(productForm.specs || {}).map(([key, value]) => (
-                    <div key={key} className="grid grid-cols-1 sm:grid-cols-[220px_1fr_auto] items-center gap-2 bg-black/80 px-3 py-2 text-xs text-gray-300 border border-[#1D1D1D]">
-                      <span className="text-[10px] text-gray-500 font-bold uppercase">{key}:</span>
-                      <input
-                        type="text"
-                        value={value}
-                        onChange={(e) => handleUpdateSpecValue(key, e.target.value)}
-                        placeholder="Nhập giá trị"
-                        className="w-full bg-[#050505] border border-[#1A1A1A] text-xs px-3 py-2 text-[#ECECEC] placeholder:text-gray-700 focus:outline-none focus:border-gold-light"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSpecItem(key)}
-                        className="justify-self-end text-red-400 hover:text-red-500 text-[10px] uppercase font-bold"
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {/* Form triggers */}
