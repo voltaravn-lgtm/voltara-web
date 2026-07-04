@@ -5,6 +5,7 @@ import ProductDetailClient from "../../../components/ProductDetailClient";
 import { getBuildProducts } from "../../../lib/productData";
 import { getProductSlug, slugifyProductText } from "../../../lib/productRoutes";
 import { buildMetadata, siteUrl } from "../../../lib/seo";
+import { cleanVideoUrls, getProductVideoEmbed } from "../../../lib/video";
 
 interface ProductDetailPageProps {
   params: Promise<{
@@ -67,6 +68,9 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const relatedProducts = allProducts.filter(
     (item) => item.category === product.category && item.id !== product.id,
   ).slice(0, 3);
+  const productVideos = cleanVideoUrls(product.videoUrls)
+    .map((url, index) => getProductVideoEmbed(url, index))
+    .filter(Boolean);
 
   const productJsonLd = {
     "@context": "https://schema.org",
@@ -91,6 +95,20 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
       name,
       value,
     })),
+    ...(productVideos.length > 0
+      ? {
+          video: productVideos.map((video, index) => ({
+            "@type": "VideoObject",
+            name: `${product.name} - Video ${index + 1}`,
+            description: product.description,
+            thumbnailUrl: [product.image],
+            uploadDate: product.updatedAt || product.createdAt || new Date().toISOString(),
+            embedUrl: video?.embedUrl,
+            contentUrl: video?.directUrl,
+            url: video?.originalUrl,
+          })),
+        }
+      : {}),
   };
 
   return (

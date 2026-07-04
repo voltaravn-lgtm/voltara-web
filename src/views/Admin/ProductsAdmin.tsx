@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
+import { cleanVideoUrls, getProductVideoEmbed } from "../../lib/video";
 import {
   Battery, Plus, Edit, Trash2, X, Save, Copy,
   Bold, Italic,
@@ -28,6 +29,7 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   warranty: "",
   image: "",
   images: [],
+  videoUrls: [],
   description: "",
   category: "",
   subCategory: "",
@@ -185,7 +187,7 @@ export function formatDescriptionToHtml(desc: string | undefined): string {
   html = html.replace(/^### (.*?)$/gm, '<h3 class="text-xs font-display font-semibold tracking-wide text-[#F5C45A] mt-3 mb-1 uppercase">$1</h3>');
   
   // Convert markdown image ![alt](url) to img tags
-  html = html.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" style="max-height:180px; margin: 8px auto; display:block;" class="max-w-full my-3 object-contain filter drop-shadow-md border border-white/5 p-1" referrerPolicy="no-referrer" />');
+  html = html.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" class="my-3 h-auto w-full object-contain filter drop-shadow-md border border-white/5 p-1" referrerPolicy="no-referrer" />');
   
   // Convert markdown link [text](url) to anchor tags
   html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-gold-light underline hover:text-white" target="_blank" rel="noopener noreferrer">$1</a>');
@@ -235,6 +237,10 @@ export default function ProductsAdmin() {
     .filter(Boolean);
 
 const galleryImageUrls = cleanImageUrls(productForm.images);
+const productVideoUrls = cleanVideoUrls(productForm.videoUrls);
+const productVideoEmbeds = productVideoUrls
+  .map((videoUrl, index) => getProductVideoEmbed(videoUrl, index))
+  .filter(Boolean);
 
   const getCategoryDisplayName = (categoryId?: string, subCategoryId?: string) => {
     const category = productCategories.find((item) => item.id === categoryId);
@@ -325,6 +331,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
       setProductForm({
         ...product,
         images: product.images || [],
+        videoUrls: product.videoUrls || [],
         subCategory: product.subCategory || "",
         hidden: product.hidden ?? false,
         syncChannel: product.syncChannel || (product.haravanProductId || product.haravanVariantId ? "haravan" : ""),
@@ -350,6 +357,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
     const currentForm = {
   ...productForm,
   images: galleryImageUrls,
+  videoUrls: productVideoUrls,
   description: getDescriptionEditorHtml() || productForm.description,
   subCategory: activeProductSubCategories.length > 0 ? productForm.subCategory || "" : "",
   hidden: productForm.hidden ?? false,
@@ -450,22 +458,45 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
     }
   };
 
+  const isDescriptionRangeValid = (range: Range | null) => {
+    const editor = descriptionEditorRef.current;
+    return Boolean(editor && range && editor.contains(range.commonAncestorContainer));
+  };
+
+  const moveDescriptionCaretToEnd = () => {
+    const editor = descriptionEditorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection) return false;
+
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    descriptionSelectionRef.current = range.cloneRange();
+    return true;
+  };
+
   const restoreDescriptionSelection = () => {
     const editor = descriptionEditorRef.current;
-    if (!editor) return;
+    if (!editor) return false;
 
     editor.focus();
     const selection = window.getSelection();
-    if (!selection || !descriptionSelectionRef.current) return;
+    const savedRange = descriptionSelectionRef.current;
+    if (!selection || !savedRange || !isDescriptionRangeValid(savedRange)) {
+      return moveDescriptionCaretToEnd();
+    }
 
     selection.removeAllRanges();
-    selection.addRange(descriptionSelectionRef.current);
+    selection.addRange(savedRange);
+    return true;
   };
 
   const insertHtmlIntoDescriptionEditor = (html: string) => {
     if (!descriptionEditorRef.current) return;
 
-    restoreDescriptionSelection();
+    if (!restoreDescriptionSelection()) return;
     document.execCommand("insertHTML", false, html);
     syncDescriptionFromEditor(false);
     rememberDescriptionSelection();
@@ -513,7 +544,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
         case "image": {
           const url = window.prompt("DÃ¡n URL hÃ¬nh áº£nh cáº§n chÃ¨n:");
           if (url) {
-            insertHtmlIntoDescriptionEditor(`<img src="${url}" alt="MÃ´ táº£ áº£nh" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
+            insertHtmlIntoDescriptionEditor(`<img src="${url}" alt="MÃ´ táº£ áº£nh" class="my-5 h-auto w-full object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
           }
           break;
         }
@@ -567,7 +598,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
         case "image": {
           const url = window.prompt("Dán URL hình ảnh cần chèn:");
           if (url) {
-            insertHtmlIntoDescriptionEditor(`<img src="${url}" alt="Mô tả ảnh" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
+            insertHtmlIntoDescriptionEditor(`<img src="${url}" alt="Mô tả ảnh" class="my-5 h-auto w-full object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
           }
           break;
         }
@@ -752,7 +783,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
 
       if (target === "description") {
         const imageHtml = urls.map((url, index) => (
-          `<img src="${url}" alt="Ảnh sản phẩm ${index + 1}" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`
+          `<img src="${url}" alt="Ảnh sản phẩm ${index + 1}" class="my-5 h-auto w-full object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`
         )).join("");
 
         if (descriptionEditorRef.current && !isToolbarPreviewMode) {
@@ -778,7 +809,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
     if (!url.trim()) return;
 
     if (descriptionEditorRef.current && !isToolbarPreviewMode) {
-      insertHtmlIntoDescriptionEditor(`<img src="${url.trim()}" alt="${alt.replace(/"/g, "&quot;")}" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
+      insertHtmlIntoDescriptionEditor(`<img src="${url.trim()}" alt="${alt.replace(/"/g, "&quot;")}" class="my-5 h-auto w-full object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
       showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
       return;
     }
@@ -980,6 +1011,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
       ["Trang thai hien thi", (product) => product.hidden ? "Dang an" : "Dang hien"],
       ["Anh dai dien", (product) => product.image],
       ["Anh bo sung", (product) => (product.images || []).join("\n")],
+      ["Video", (product) => (product.videoUrls || []).join("\n")],
       ["Mo ta", (product) => product.description],
       ["Thong so ky thuat", (product) => formatSpecsForExport(product.specs)],
       ["Ngay tao", (product) => product.createdAt],
@@ -1598,6 +1630,7 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
                       </div>
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insertImageUrlToDescription(productForm.image || "", productForm.name || "Ảnh sản phẩm")}
                         className="border border-white/15 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gray-300 hover:border-gold-light hover:text-gold-light transition-colors"
                       >
@@ -1646,11 +1679,65 @@ const galleryImageUrls = cleanImageUrls(productForm.images);
                           </div>
                           <button
                             type="button"
+                            onMouseDown={(event) => event.preventDefault()}
                             onClick={() => insertImageUrlToDescription(imageUrl, `${productForm.name || "Ảnh sản phẩm"} ${index + 1}`)}
                             className="block w-20 border border-white/10 px-1.5 py-1 text-[8.5px] font-display font-bold uppercase tracking-wider text-gray-400 hover:border-gold-light hover:text-gold-light"
                           >
                             Chèn
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="col-span-1 sm:col-span-2 space-y-2">
+                  <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">
+                    Video san pham (YouTube hoac link video, moi link mot dong)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder={"https://www.youtube.com/watch?v=...\nhttps://example.com/video.mp4"}
+                    value={(productForm.videoUrls || []).join("\n")}
+                    onChange={(e) => {
+                      const lines = e.target.value.split(/\r?\n/).map((line) => line.trim());
+                      setProductForm(prev => ({ ...prev, videoUrls: lines }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.stopPropagation();
+                    }}
+                    className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none font-mono placeholder:text-gray-700 leading-relaxed resize-y"
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    Ho tro YouTube, youtu.be, YouTube Shorts, link .mp4, .webm, .ogg. Link khac se hien nut mo video.
+                  </p>
+                  {productVideoEmbeds.length > 0 && (
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {productVideoEmbeds.map((video, index) => video && (
+                        <div key={`${video.originalUrl}-${index}`} className="border border-white/10 bg-black p-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <span className="text-[9px] font-display font-bold uppercase tracking-widest text-gold-light">
+                              {video.provider === "youtube" ? "YouTube" : video.provider === "direct" ? "Video file" : "Link ngoai"}
+                            </span>
+                            <a href={video.originalUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] uppercase tracking-wider text-gray-500 hover:text-gold-light">
+                              Mo link
+                            </a>
+                          </div>
+                          {video.embedUrl ? (
+                            <iframe
+                              src={video.embedUrl}
+                              title={`Video san pham ${index + 1}`}
+                              className="aspect-video w-full border border-white/10 bg-[#050505]"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            />
+                          ) : video.directUrl ? (
+                            <video controls src={video.directUrl} className="aspect-video w-full border border-white/10 bg-[#050505]" />
+                          ) : (
+                            <div className="flex aspect-video items-center justify-center border border-white/10 bg-[#050505] px-4 text-center text-[11px] text-gray-500">
+                              Link nay khong ho tro nhung truc tiep. Nguoi dung se mo video bang nut lien ket.
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

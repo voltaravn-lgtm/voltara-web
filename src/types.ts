@@ -13,6 +13,7 @@ export interface Product {
   warranty: string;
   image: string;
   images?: string[];
+  videoUrls?: string[];
   tag?: string;
   description: string;
   category: string;

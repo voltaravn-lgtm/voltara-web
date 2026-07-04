@@ -186,6 +186,19 @@ body.day-mode .fixed * {
   overflow-x: auto;
 }
 
+.product-description-content img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  margin: 20px 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #000;
+  padding: 12px;
+}
+
 .product-description-content[contenteditable="true"]:empty::before {
   content: attr(data-placeholder);
   color: #6b7280;
@@ -220,6 +233,63 @@ body.day-mode .fixed * {
   background: rgba(245, 196, 90, 0.10);
   color: #ffffff;
   font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .product-description-content {
+    overflow-x: visible;
+  }
+
+  .product-description-content table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+  }
+
+  .product-description-content thead,
+  .product-description-content tbody,
+  .product-description-content tr,
+  .product-description-content th,
+  .product-description-content td {
+    display: block;
+    width: 100%;
+  }
+
+  .product-description-content tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .product-description-content tr:last-child {
+    border-bottom: 0;
+  }
+
+  .product-description-content th,
+  .product-description-content td {
+    border-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .product-description-content td:first-child,
+  .product-description-content th:first-child {
+    padding-bottom: 4px;
+    color: #f5c45a;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .product-description-content td:not(:first-child),
+  .product-description-content th:not(:first-child) {
+    padding-top: 0;
+  }
+
+  .product-description-content tr:first-child {
+    display: none;
+  }
 }
 
 body.day-mode .product-description-content table {

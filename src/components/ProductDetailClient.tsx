@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Phone, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Phone, PlayCircle, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import QuoteRequestModal from "./QuoteRequestModal";
 import OrderRequestModal from "./OrderRequestModal";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
+import { cleanVideoUrls, getProductVideoEmbed } from "../lib/video";
 import { Product } from "../types";
 import ProductPromoImage from "./ProductPromoImage";
 
@@ -56,6 +57,10 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
   const technicalSpecs = useMemo(
     () => Object.entries(currentProduct.specs || {}).filter(([, value]) => String(value || "").trim()),
     [currentProduct.specs],
+  );
+  const productVideos = useMemo(
+    () => cleanVideoUrls(currentProduct.videoUrls).map((url, index) => getProductVideoEmbed(url, index)).filter(Boolean),
+    [currentProduct.videoUrls],
   );
   const regularPrice = formatDisplayPrice(currentProduct.price);
   const salePrice = formatDisplayPrice(currentProduct.salePrice);
@@ -138,13 +143,13 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 </div>
 
                 {gallery.length > 1 && (
-                  <div className="mt-4 grid grid-cols-4 gap-3">
+                  <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
                     {gallery.map((image) => (
                       <button
                         key={image}
                         type="button"
                         onClick={() => setActiveImage(image)}
-                        className={`aspect-square border bg-black p-2 transition-colors ${
+                        className={`h-24 w-24 shrink-0 border bg-black p-2 transition-colors sm:h-28 sm:w-28 ${
                           activeImage === image ? "border-gold-light" : "border-white/10 hover:border-gold-dark/50"
                         }`}
                         aria-label={`Xem ảnh ${currentProduct.name}`}
@@ -252,6 +257,51 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 className="product-description-content text-sm leading-7 text-gray-300"
                 dangerouslySetInnerHTML={{ __html: descriptionHtml }}
               />
+            </div>
+          )}
+
+          {productVideos.length > 0 && (
+            <div className="mb-8 border border-white/10 bg-[#0C0C0C] p-6 lg:p-8">
+              <div className="mb-6 flex items-center gap-2">
+                <PlayCircle className="h-5 w-5 text-gold-light" />
+                <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">
+                  Video san pham
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5">
+                {productVideos.map((video, index) => video && (
+                  <div key={`${video.originalUrl}-${index}`} className="overflow-hidden border border-white/10 bg-black">
+                    {video.embedUrl ? (
+                      <iframe
+                        src={video.embedUrl}
+                        title={`${currentProduct.name} video ${index + 1}`}
+                        className="aspect-video w-full bg-black"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    ) : video.directUrl ? (
+                      <video controls src={video.directUrl} className="aspect-video w-full bg-black" />
+                    ) : (
+                      <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-[#050505] p-6 text-center">
+                        <PlayCircle className="h-10 w-10 text-gold-light" />
+                        <p className="max-w-sm text-xs leading-relaxed text-gray-400">
+                          Video nay can mo tren trang nguon.
+                        </p>
+                        <a
+                          href={video.originalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 border border-gold-dark/40 px-4 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light hover:border-gold-light hover:text-white"
+                        >
+                          Mo video
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -400,7 +450,7 @@ function formatProductDescriptionToHtml(desc: string | undefined): string {
   let html = decodeDescriptionHtml(desc.trim());
   if (hasDescriptionHtml(html)) return html;
 
-  html = html.replace(/!\[(.*?)\]\s*\((.*?)\)/gs, '<img src="$2" alt="$1" class="my-5 max-h-[420px] w-full max-w-3xl object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />');
+  html = html.replace(/!\[(.*?)\]\s*\((.*?)\)/gs, '<img src="$2" alt="$1" class="my-5 h-auto w-full object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />');
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
   html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
   html = html.replace(/^### (.*?)$/gm, '<h3 class="mt-6 mb-2 font-display text-sm font-black uppercase tracking-widest text-gold-light">$1</h3>');
