@@ -35,13 +35,31 @@ export interface Product {
   hidden?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  variants?: ProductVariant[];
   specs: {
     [key: string]: string;
   };
 }
 
+export interface ProductVariant {
+  id: string;
+  name: string;
+  price?: string;
+  salePrice?: string;
+  image?: string;
+  sku?: string;
+  stockQuantity?: string;
+  stockStatus?: Product["stockStatus"];
+}
+
 export interface CartItem {
   productId: string;
+  variantId?: string;
+  variantName?: string;
+  variantPrice?: string;
+  variantSalePrice?: string;
+  variantSku?: string;
+  variantImage?: string;
   quantity: number;
   addedAt: string;
 }

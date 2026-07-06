@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
-import { Product, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
+import { Product, ProductVariant, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
 import { getProductSlug } from "../lib/productRoutes";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
 import { auth, db, isFirebaseConfigured } from "../lib/firebase";
@@ -210,9 +210,9 @@ interface AppContextType {
   isCartOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
-  addToCart: (product: Product, quantity?: number) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
+  addToCart: (product: Product, quantity?: number, variant?: ProductVariant | null) => void;
+  updateCartQuantity: (productId: string, quantity: number, variantId?: string) => void;
+  removeFromCart: (productId: string, variantId?: string) => void;
   clearCart: () => void;
   cartCount: number;
 
@@ -1305,13 +1305,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = (product: Product, quantity = 1, variant?: ProductVariant | null) => {
     const safeQuantity = Math.max(1, Math.floor(quantity || 1));
+    const variantId = variant?.id || "";
     setCartItems(prev => {
-      const existing = prev.find(item => item.productId === product.id);
+      const existing = prev.find(item => item.productId === product.id && (item.variantId || "") === variantId);
       if (existing) {
         return prev.map(item =>
-          item.productId === product.id
+          item.productId === product.id && (item.variantId || "") === variantId
             ? { ...item, quantity: item.quantity + safeQuantity }
             : item
         );
@@ -1321,6 +1322,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...prev,
         {
           productId: product.id,
+          variantId: variant?.id,
+          variantName: variant?.name,
+          variantPrice: variant?.price,
+          variantSalePrice: variant?.salePrice,
+          variantSku: variant?.sku,
+          variantImage: variant?.image,
           quantity: safeQuantity,
           addedAt: new Date().toISOString(),
         },
@@ -1329,17 +1336,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Đã thêm "${product.name}" vào giỏ hàng.`, "success");
   };
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
+  const updateCartQuantity = (productId: string, quantity: number, variantId = "") => {
     const safeQuantity = Math.max(0, Math.floor(quantity || 0));
     setCartItems(prev =>
       safeQuantity <= 0
-        ? prev.filter(item => item.productId !== productId)
-        : prev.map(item => item.productId === productId ? { ...item, quantity: safeQuantity } : item)
+        ? prev.filter(item => !(item.productId === productId && (item.variantId || "") === variantId))
+        : prev.map(item => item.productId === productId && (item.variantId || "") === variantId ? { ...item, quantity: safeQuantity } : item)
     );
   };
 
-  const removeFromCart = (productId: string) => {
-    setCartItems(prev => prev.filter(item => item.productId !== productId));
+  const removeFromCart = (productId: string, variantId = "") => {
+    setCartItems(prev => prev.filter(item => !(item.productId === productId && (item.variantId || "") === variantId)));
   };
 
   const clearCart = () => {

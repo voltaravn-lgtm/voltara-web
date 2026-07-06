@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
-import { Product } from "../../types";
+import { Product, ProductVariant } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
 import { getProductDescriptionExcerpt } from "../../lib/productDescription";
 import { getProductSlug, slugifyProductText } from "../../lib/productRoutes";
@@ -38,6 +38,7 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   subCategory: "",
   price: "",
   salePrice: "",
+  variants: [],
   sku: "",
   barcode: "",
   stockQuantity: "",
@@ -252,6 +253,19 @@ export default function ProductsAdmin() {
         .map(([key, value]) => [key.trim(), String(value || "").trim()])
         .filter(([key, value]) => Boolean(key && value)),
     ) as Record<string, string>;
+  const cleanProductVariants = (variants: Partial<Product>["variants"]): ProductVariant[] =>
+    (variants || [])
+      .map((variant, index) => ({
+        id: String(variant.id || `variant-${index + 1}`).trim() || `variant-${index + 1}`,
+        name: String(variant.name || "").trim(),
+        price: String(variant.price || "").trim(),
+        salePrice: String(variant.salePrice || "").trim(),
+        image: String(variant.image || "").trim(),
+        sku: String(variant.sku || "").trim(),
+        stockQuantity: String(variant.stockQuantity || "").trim(),
+        stockStatus: (variant.stockStatus || "") as ProductVariant["stockStatus"],
+      }))
+      .filter((variant) => Boolean(variant.name));
 
   const galleryImageUrls = cleanImageUrls(productForm.images);
   const quickInsertImages = Array.from(new Set([productForm.image, ...galleryImageUrls].filter((imageUrl): imageUrl is string => Boolean(imageUrl))));
@@ -260,6 +274,7 @@ export default function ProductsAdmin() {
     .map((videoUrl, index) => getProductVideoEmbed(videoUrl, index))
     .filter(Boolean);
   const visibleSpecEntries = Object.entries(cleanProductSpecs(productForm.specs));
+  const productVariants = cleanProductVariants(productForm.variants);
 
   useEffect(() => {
     if (!isProductModalOpen) return;
@@ -370,6 +385,7 @@ export default function ProductsAdmin() {
         ...product,
         images: product.images || [],
         videoUrls: product.videoUrls || [],
+        variants: product.variants || [],
         subCategory: product.subCategory || "",
         hidden: product.hidden ?? false,
         syncChannel: product.syncChannel || (product.haravanProductId || product.haravanVariantId ? "haravan" : ""),
@@ -396,6 +412,7 @@ export default function ProductsAdmin() {
   ...productForm,
   images: galleryImageUrls,
   videoUrls: productVideoUrls,
+  variants: productVariants,
   description: getDescriptionEditorHtml() || productForm.description,
   subCategory: activeProductSubCategories.length > 0 ? productForm.subCategory || "" : "",
   hidden: productForm.hidden ?? false,
@@ -459,6 +476,41 @@ export default function ProductsAdmin() {
     });
     setIsToolbarPreviewMode(false);
     setIsProductModalOpen(true);
+  };
+
+  const handleAddVariant = () => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: [
+        ...(prev.variants || []),
+        {
+          id: `variant-${Date.now()}`,
+          name: "",
+          price: "",
+          salePrice: "",
+          image: "",
+          sku: "",
+          stockQuantity: "",
+          stockStatus: "",
+        },
+      ],
+    }));
+  };
+
+  const handleUpdateVariant = (index: number, updates: Partial<ProductVariant>) => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).map((variant, variantIndex) =>
+        variantIndex === index ? { ...variant, ...updates } : variant
+      ),
+    }));
+  };
+
+  const handleRemoveVariant = (index: number) => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).filter((_, variantIndex) => variantIndex !== index),
+    }));
   };
 
   const handleToggleProductVisibility = (prod: Product) => {
@@ -1633,6 +1685,48 @@ export default function ProductsAdmin() {
                         <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
                   </select>
+                </div>
+
+                <div className="col-span-1 sm:col-span-2 border border-gold-dark/20 bg-[#080808] p-4 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Phan loai san pham</h3>
+                      <p className="mt-1 text-[10px] text-gray-500">Neu gia rieng de trong, phan loai se dung gia cua san pham chinh. Anh rieng se hien khi khach chon phan loai.</p>
+                    </div>
+                    <button type="button" onClick={handleAddVariant} className="inline-flex items-center gap-1.5 border border-gold-dark/40 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light hover:border-gold-light hover:text-white">
+                      <Plus className="w-3.5 h-3.5" />
+                      Them phan loai
+                    </button>
+                  </div>
+                  {(productForm.variants || []).length > 0 ? (
+                    <div className="space-y-3">
+                      {(productForm.variants || []).map((variant, index) => (
+                        <div key={variant.id || index} className="border border-white/10 bg-black/70 p-3 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Phan loai {index + 1}</span>
+                            <button type="button" onClick={() => handleRemoveVariant(index)} className="p-1.5 text-gray-500 hover:text-red-400" aria-label="Xoa phan loai">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <input type="text" value={variant.name || ""} onChange={(e) => handleUpdateVariant(index, { name: e.target.value })} placeholder="Ten phan loai" className="md:col-span-2 w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.price || ""} onChange={(e) => handleUpdateVariant(index, { price: e.target.value })} placeholder={productForm.price || "Gia rieng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.salePrice || ""} onChange={(e) => handleUpdateVariant(index, { salePrice: e.target.value })} placeholder={productForm.salePrice || "Gia giam rieng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.sku || ""} onChange={(e) => handleUpdateVariant(index, { sku: e.target.value })} placeholder={productForm.sku || "SKU rieng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono" />
+                            <input type="number" min="0" value={variant.stockQuantity || ""} onChange={(e) => handleUpdateVariant(index, { stockQuantity: e.target.value })} placeholder="So ton" className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.image || ""} onChange={(e) => handleUpdateVariant(index, { image: e.target.value })} placeholder={productForm.image || "URL anh phan loai"} className="md:col-span-2 w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono" />
+                          </div>
+                          {variant.image && (
+                            <div className="h-20 w-24 border border-white/10 bg-[#050505] p-1.5">
+                              <img src={variant.image} alt={variant.name || ""} className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-white/10 bg-black/40 px-4 py-5 text-[10px] text-gray-500">Chua co phan loai. San pham se hien mot gia va mot anh dai dien nhu hien tai.</div>
+                  )}
                 </div>
 
                 {activeProductSubCategories.length > 0 && (

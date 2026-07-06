@@ -7,12 +7,13 @@ interface OrderRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
   productName: string;
+  variantName?: string;
   productPrice: string;
   productSku?: string;
   productId?: string;
 }
 
-export default function OrderRequestModal({ isOpen, onClose, productName, productPrice, productSku, productId }: OrderRequestModalProps) {
+export default function OrderRequestModal({ isOpen, onClose, productName, variantName, productPrice, productSku, productId }: OrderRequestModalProps) {
   const { addQuoteRequest, showToast } = useApp();
   const [isSuccess, setIsSuccess] = useState(false);
   const [form, setForm] = useState({
@@ -47,12 +48,13 @@ export default function OrderRequestModal({ isOpen, onClose, productName, produc
       email: form.email,
       province: form.province || "Chưa cung cấp",
       address: form.address,
-      productName,
+      productName: variantName ? `${productName} - ${variantName}` : productName,
       batteryType: "Đặt hàng sản phẩm có giá",
       voltage: "Không áp dụng",
       capacity: "Không áp dụng",
       notes: [
         productId ? `Product ID: ${productId}` : "",
+        variantName ? `Phan loai: ${variantName}` : "",
         productSku ? `SKU: ${productSku}` : "",
         `Loại yêu cầu: Đặt hàng`,
         `Giá hiển thị: ${productPrice || "Không rõ"}`,
@@ -122,6 +124,7 @@ export default function OrderRequestModal({ isOpen, onClose, productName, produc
                   <FileText className="w-4 h-4 mt-0.5 text-gray-400 shrink-0" />
                   <div>
                     <div className="text-white font-display font-bold text-xs uppercase tracking-wide">{productName}</div>
+                    {variantName && <div className="mt-1 text-[10px] font-display font-bold uppercase tracking-wider text-gold-light">Phan loai: {variantName}</div>}
                     {productPrice && <div className="mt-1 text-gold-light font-display font-black text-sm">{productPrice}</div>}
                     {productSku && <div className="mt-1 text-[10px] font-mono uppercase text-gray-500">SKU: {productSku}</div>}
                   </div>

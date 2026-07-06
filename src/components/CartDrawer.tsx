@@ -30,7 +30,8 @@ export default function CartDrawer() {
     return cartItems
       .map((item) => {
         const product = products.find((prod) => prod.id === item.productId);
-        return product ? { ...item, product } : null;
+        const variant = product?.variants?.find((entry) => entry.id === item.variantId);
+        return product ? { ...item, product, variant } : null;
       })
       .filter(Boolean);
   }, [cartItems, products]);
@@ -64,8 +65,9 @@ export default function CartDrawer() {
 
     const productLines = detailedItems.map((item) => {
       if (!item) return "";
-      const price = formatDisplayPrice(item.product.salePrice || item.product.price) || "Liên hệ";
-      return `- ${item.product.name} | SKU: ${item.product.sku || item.product.id} | SL: ${item.quantity} | Giá: ${price}`;
+      const variantName = item.variant?.name || item.variantName;
+      const price = formatDisplayPrice(item.variant?.salePrice || item.variantSalePrice || item.variant?.price || item.variantPrice || item.product.salePrice || item.product.price) || "Liên hệ";
+      return `- ${item.product.name}${variantName ? ` - ${variantName}` : ""} | SKU: ${item.variant?.sku || item.variantSku || item.product.sku || item.product.id} | SL: ${item.quantity} | Giá: ${price}`;
     }).filter(Boolean);
     const fullAddress = `${address.trim()}, ${district.trim()}, ${province.trim()}`;
 
@@ -125,19 +127,22 @@ export default function CartDrawer() {
           ) : (
             <div className="space-y-4">
               {detailedItems.map((item) => item && (
-                <div key={item.productId} className="border border-white/10 bg-[#101010] p-3">
+                <div key={`${item.productId}-${item.variant?.id || item.variantId || "default"}`} className="border border-white/10 bg-[#101010] p-3">
                   <div className="flex gap-3">
                     <Link to={getProductHref(item.product)} onClick={closeCart} className="h-20 w-20 shrink-0 border border-white/10 bg-black p-1">
-                      <img src={item.product.image} alt={item.product.name} className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                      <img src={item.variant?.image || item.variantImage || item.product.image} alt={item.product.name} className="h-full w-full object-contain" referrerPolicy="no-referrer" />
                     </Link>
                     <div className="min-w-0 flex-1">
                       <Link to={getProductHref(item.product)} onClick={closeCart} className="line-clamp-2 text-xs font-display font-bold uppercase leading-relaxed text-white hover:text-gold-light">
                         {item.product.name}
                       </Link>
-                      <div className="mt-1 text-[10px] font-mono uppercase text-gray-500">SKU: {item.product.sku || item.product.id}</div>
-                      <div className="mt-1 text-xs font-display font-black text-gold-light">{formatDisplayPrice(item.product.salePrice || item.product.price) || "Liên hệ"}</div>
+                      {(item.variant?.name || item.variantName) && (
+                        <div className="mt-1 text-[10px] font-display font-bold uppercase tracking-wider text-gold-light">Phan loai: {item.variant?.name || item.variantName}</div>
+                      )}
+                      <div className="mt-1 text-[10px] font-mono uppercase text-gray-500">SKU: {item.variant?.sku || item.variantSku || item.product.sku || item.product.id}</div>
+                      <div className="mt-1 text-xs font-display font-black text-gold-light">{formatDisplayPrice(item.variant?.salePrice || item.variantSalePrice || item.variant?.price || item.variantPrice || item.product.salePrice || item.product.price) || "Liên hệ"}</div>
                     </div>
-                    <button type="button" onClick={() => removeFromCart(item.productId)} className="self-start p-1.5 text-gray-500 hover:text-red-400">
+                    <button type="button" onClick={() => removeFromCart(item.productId, item.variant?.id || item.variantId || "")} className="self-start p-1.5 text-gray-500 hover:text-red-400">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -145,11 +150,11 @@ export default function CartDrawer() {
                   <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
                     <span className="text-[10px] font-display font-bold uppercase tracking-widest text-gray-500">Số lượng</span>
                     <div className="flex items-center border border-white/10 bg-black">
-                      <button type="button" onClick={() => updateCartQuantity(item.productId, item.quantity - 1)} className="p-2 text-gray-400 hover:text-white">
+                      <button type="button" onClick={() => updateCartQuantity(item.productId, item.quantity - 1, item.variant?.id || item.variantId || "")} className="p-2 text-gray-400 hover:text-white">
                         <Minus className="h-3.5 w-3.5" />
                       </button>
                       <span className="w-10 text-center text-xs font-bold text-white">{item.quantity}</span>
-                      <button type="button" onClick={() => updateCartQuantity(item.productId, item.quantity + 1)} className="p-2 text-gray-400 hover:text-white">
+                      <button type="button" onClick={() => updateCartQuantity(item.productId, item.quantity + 1, item.variant?.id || item.variantId || "")} className="p-2 text-gray-400 hover:text-white">
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>

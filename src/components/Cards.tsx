@@ -84,8 +84,10 @@ export const StatCard: React.FC<{
 
 // Premium ProductCard matching the photos
 export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
-  const regularPrice = formatDisplayPrice(product.price);
-  const salePrice = formatDisplayPrice(product.salePrice);
+  const firstVariantWithPrice = (product.variants || []).find((variant) => variant.salePrice || variant.price);
+  const regularPrice = formatDisplayPrice(firstVariantWithPrice?.price || product.price);
+  const salePrice = formatDisplayPrice(firstVariantWithPrice?.salePrice || product.salePrice);
+  const hasVariants = Boolean(product.variants?.length);
   const technicalSpecs = Object.entries(product.specs || {}).filter(([, value]) => String(value || "").trim());
 
   return (
@@ -130,11 +132,11 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           <div className="mb-2 sm:mb-3 min-h-[30px] sm:min-h-[34px]">
             {salePrice ? (
               <div className="space-y-0.5">
-                <div className="text-xs sm:text-sm font-display font-black text-gold-light">{salePrice}</div>
+                <div className="text-xs sm:text-sm font-display font-black text-gold-light">{hasVariants ? "Tu " : ""}{salePrice}</div>
                 {regularPrice && <div className="text-[10px] text-gray-500 line-through">{regularPrice}</div>}
               </div>
             ) : regularPrice ? (
-              <div className="text-xs sm:text-sm font-display font-black text-gold-light">{regularPrice}</div>
+              <div className="text-xs sm:text-sm font-display font-black text-gold-light">{hasVariants ? "Tu " : ""}{regularPrice}</div>
             ) : (
               <div className="text-xs font-display font-bold uppercase tracking-wider text-gray-500">Liên hệ</div>
             )}

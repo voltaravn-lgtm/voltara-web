@@ -7,7 +7,7 @@ import OrderRequestModal from "./OrderRequestModal";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
 import { cleanVideoUrls, getProductVideoEmbed } from "../lib/video";
-import { Product } from "../types";
+import { Product, ProductVariant } from "../types";
 import ProductPromoImage from "./ProductPromoImage";
 
 interface ProductDetailClientProps {
@@ -28,11 +28,22 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
       : productSource.filter((item) => item.id !== currentProduct.id)
   ).slice(0, 12);
   const relatedProductsRef = useRef<HTMLDivElement | null>(null);
+  const productVariants = useMemo(
+    () => (currentProduct.variants || []).filter((variant) => String(variant.name || "").trim()),
+    [currentProduct.variants],
+  );
+  const [selectedVariantId, setSelectedVariantId] = useState("");
+  const selectedVariant = productVariants.find((variant) => variant.id === selectedVariantId) || productVariants[0] || null;
 
   const gallery = useMemo(() => {
-    const images = [currentProduct.image, ...(currentProduct.images || [])];
-    return Array.from(new Set(images.filter(Boolean)));
-  }, [currentProduct.image, currentProduct.images]);
+    const images = [
+      selectedVariant?.image,
+      currentProduct.image,
+      ...(currentProduct.images || []),
+      ...productVariants.map((variant) => variant.image),
+    ];
+    return Array.from(new Set(images.filter((image): image is string => Boolean(image))));
+  }, [currentProduct.image, currentProduct.images, productVariants, selectedVariant?.image]);
 
   const [activeImage, setActiveImage] = useState(gallery[0] || currentProduct.image);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
@@ -63,8 +74,8 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
     () => cleanVideoUrls(currentProduct.videoUrls).map((url, index) => getProductVideoEmbed(url, index)).filter(Boolean),
     [currentProduct.videoUrls],
   );
-  const regularPrice = formatDisplayPrice(currentProduct.price);
-  const salePrice = formatDisplayPrice(currentProduct.salePrice);
+  const regularPrice = formatDisplayPrice(selectedVariant?.price || currentProduct.price);
+  const salePrice = formatDisplayPrice(selectedVariant?.salePrice || currentProduct.salePrice);
   const hasVisiblePrice = Boolean(regularPrice || salePrice);
   const activeImageIndex = Math.max(0, gallery.findIndex((image) => image === activeImage));
   const goToPreviousImage = () => {
@@ -91,6 +102,15 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
   useEffect(() => {
     setActiveImage(gallery[0] || currentProduct.image);
   }, [gallery, currentProduct.image]);
+
+  useEffect(() => {
+    setSelectedVariantId(productVariants[0]?.id || "");
+  }, [currentProduct.id, productVariants]);
+
+  const handleSelectVariant = (variant: ProductVariant) => {
+    setSelectedVariantId(variant.id);
+    if (variant.image) setActiveImage(variant.image);
+  };
 
   return (
     <div className="bg-[#050505] pb-20">
@@ -212,6 +232,36 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 </div>
               )}
 
+              {productVariants.length > 0 && (
+                <div className="mt-6">
+                  <div className="mb-2 text-[10px] font-display font-bold uppercase tracking-widest text-gray-500">Chon phan loai</div>
+                  <div className="flex flex-wrap gap-2">
+                    {productVariants.map((variant) => {
+                      const isActive = selectedVariant?.id === variant.id;
+                      const variantPrice = formatDisplayPrice(variant.salePrice || variant.price || currentProduct.salePrice || currentProduct.price);
+                      return (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          onClick={() => handleSelectVariant(variant)}
+                          className={`flex items-center gap-2 border px-3 py-2 text-left transition-colors ${
+                            isActive ? "border-gold-light bg-gold-dark/10 text-white" : "border-white/10 bg-[#101010] text-gray-300 hover:border-gold-dark/60"
+                          }`}
+                        >
+                          {variant.image && (
+                            <img src={variant.image} alt="" className="h-9 w-9 shrink-0 object-contain" referrerPolicy="no-referrer" />
+                          )}
+                          <span>
+                            <span className="block text-[11px] font-display font-bold uppercase tracking-wider">{variant.name}</span>
+                            {variantPrice && <span className="mt-0.5 block text-[10px] font-semibold text-gold-light">{variantPrice}</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {summarySpecs.length > 0 && (
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {summarySpecs.map(([label, value]) => (
@@ -227,7 +277,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 {hasVisiblePrice && (
                   <button
                     type="button"
-                    onClick={() => addToCart(currentProduct)}
+                    onClick={() => addToCart(currentProduct, 1, selectedVariant)}
                     className="inline-flex h-12 items-center justify-center gap-2 border border-gold-dark/40 px-6 text-[11px] font-display font-black uppercase tracking-widest text-gold-light transition-colors hover:border-gold-light hover:text-white"
                   >
                     <ShoppingCart className="h-4 w-4" />
@@ -443,8 +493,9 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
         isOpen={isOrderModalOpen}
         onClose={() => setIsOrderModalOpen(false)}
         productName={currentProduct.name}
+        variantName={selectedVariant?.name}
         productPrice={salePrice || regularPrice}
-        productSku={currentProduct.sku}
+        productSku={selectedVariant?.sku || currentProduct.sku}
         productId={currentProduct.id}
       />
     </div>
