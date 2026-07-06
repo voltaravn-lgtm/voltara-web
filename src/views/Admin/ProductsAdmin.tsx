@@ -241,6 +241,7 @@ export default function ProductsAdmin() {
   const descriptionRedoStackRef = useRef<string[]>([]);
   const descriptionCustomUndoIsLatestRef = useRef(false);
   const descriptionDraftRef = useRef("");
+  const productFormScrollRef = useRef<HTMLFormElement | null>(null);
   const activeProductCategory = productCategories.find((category) => category.id === productForm.category);
   const activeProductSubCategories = (activeProductCategory?.children || []).filter((child) => !child.hidden);
   const cleanImageUrls = (images: Partial<Product>["images"]) =>
@@ -279,13 +280,40 @@ export default function ProductsAdmin() {
   useEffect(() => {
     if (!isProductModalOpen) return;
 
+    const scrollY = window.scrollY;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyWidth = document.body.style.width;
     const previousBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
 
     return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.style.overflow = previousBodyOverflow;
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.width = previousBodyWidth;
+      window.scrollTo(0, scrollY);
     };
   }, [isProductModalOpen]);
+
+  const handleProductModalWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (event.ctrlKey) return;
+
+    const target = event.target as HTMLElement;
+    if (target.closest("textarea, [contenteditable='true']")) return;
+
+    const scroller = productFormScrollRef.current;
+    if (!scroller) return;
+
+    event.preventDefault();
+    scroller.scrollTop += event.deltaY;
+  };
 
   const getCategoryDisplayName = (categoryId?: string, subCategoryId?: string) => {
     const category = productCategories.find((item) => item.id === categoryId);
@@ -1565,8 +1593,8 @@ export default function ProductsAdmin() {
 
       {/* POPUP MODAL */}
       {isProductModalOpen && (
-        <div id="product-admin-modal" className="fixed inset-0 bg-black z-50 flex overflow-hidden">
-          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-screen h-[100dvh] max-h-[100dvh] overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
+        <div id="product-admin-modal" className="fixed inset-0 bg-black z-50 flex min-h-0 overflow-hidden" onWheel={handleProductModalWheel}>
+          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full h-full min-h-0 overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
             <div className="shrink-0 px-4 py-4 sm:px-6 border-b border-white/5 flex items-center justify-between">
               <h2 className="text-sm font-display font-black tracking-widest text-[#F5C45A] uppercase flex items-center gap-2">
                 <Battery className="w-4 h-4 text-gold-light" />
@@ -1580,7 +1608,7 @@ export default function ProductsAdmin() {
               </button>
             </div>
 
-            <form id="product-admin-form" onSubmit={handleSaveProduct} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:p-6 sm:pb-8 space-y-4">
+            <form ref={productFormScrollRef} id="product-admin-form" onSubmit={handleSaveProduct} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:p-6 sm:pb-8 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 <div className="space-y-1">
