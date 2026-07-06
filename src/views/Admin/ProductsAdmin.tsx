@@ -231,6 +231,12 @@ export default function ProductsAdmin() {
   const [newSpecValue, setNewSpecValue] = useState("");
   const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
   const descriptionSelectionRef = useRef<Range | null>(null);
+  const hasDescriptionSelectionRef = useRef(false);
+  const hasManualDescriptionSelectionRef = useRef(false);
+  const descriptionInsertAnchorRef = useRef<Node | null>(null);
+  const descriptionUndoStackRef = useRef<string[]>([]);
+  const descriptionRedoStackRef = useRef<string[]>([]);
+  const descriptionCustomUndoIsLatestRef = useRef(false);
   const descriptionDraftRef = useRef("");
   const activeProductCategory = productCategories.find((category) => category.id === productForm.category);
   const activeProductSubCategories = (activeProductCategory?.children || []).filter((child) => !child.hidden);
@@ -347,6 +353,14 @@ export default function ProductsAdmin() {
   };
 
   const handleOpenProductModal = (product?: Product) => {
+    descriptionSelectionRef.current = null;
+    hasDescriptionSelectionRef.current = false;
+    hasManualDescriptionSelectionRef.current = false;
+    descriptionInsertAnchorRef.current = null;
+    descriptionUndoStackRef.current = [];
+    descriptionRedoStackRef.current = [];
+    descriptionCustomUndoIsLatestRef.current = false;
+
     if (product) {
       setEditingProduct(product);
       descriptionDraftRef.current = product.description || "";
@@ -465,6 +479,7 @@ export default function ProductsAdmin() {
 
   const cleanDescriptionEditorHtml = (html: string) => {
     return html
+      .replace(/<span[^>]*data-description-caret="true"[^>]*>[\s\S]*?<\/span>/gi, "")
       .replace(/<p>(?:&nbsp;|\s|<br\s*\/?>)*<\/p>/gi, "")
       .replace(/<div>(?:&nbsp;|\s|<br\s*\/?>)*<\/div>/gi, "")
       .replace(/&nbsp;/g, " ")
@@ -487,6 +502,47 @@ export default function ProductsAdmin() {
     return html;
   };
 
+  const pushDescriptionUndoSnapshot = () => {
+    const snapshot = getDescriptionEditorHtml();
+    const stack = descriptionUndoStackRef.current;
+    if (stack[stack.length - 1] !== snapshot) {
+      stack.push(snapshot);
+      if (stack.length > 80) stack.shift();
+    }
+    descriptionRedoStackRef.current = [];
+  };
+
+  const setDescriptionEditorHtml = (html: string) => {
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
+
+    editor.innerHTML = html;
+    descriptionDraftRef.current = cleanDescriptionEditorHtml(html);
+    setProductForm(prev => ({ ...prev, description: descriptionDraftRef.current }));
+    moveDescriptionCaretToEnd();
+  };
+
+  const undoDescriptionEditorChange = () => {
+    if (!descriptionCustomUndoIsLatestRef.current) return false;
+    const previous = descriptionUndoStackRef.current.pop();
+    if (previous === undefined) return false;
+
+    descriptionRedoStackRef.current.push(getDescriptionEditorHtml());
+    setDescriptionEditorHtml(previous);
+    descriptionCustomUndoIsLatestRef.current = false;
+    return true;
+  };
+
+  const redoDescriptionEditorChange = () => {
+    const next = descriptionRedoStackRef.current.pop();
+    if (next === undefined) return false;
+
+    descriptionUndoStackRef.current.push(getDescriptionEditorHtml());
+    setDescriptionEditorHtml(next);
+    descriptionCustomUndoIsLatestRef.current = true;
+    return true;
+  };
+
   const rememberDescriptionSelection = () => {
     const editor = descriptionEditorRef.current;
     const selection = window.getSelection();
@@ -495,6 +551,9 @@ export default function ProductsAdmin() {
     const range = selection.getRangeAt(0);
     if (editor.contains(range.commonAncestorContainer)) {
       descriptionSelectionRef.current = range.cloneRange();
+      hasDescriptionSelectionRef.current = true;
+      hasManualDescriptionSelectionRef.current = true;
+      descriptionInsertAnchorRef.current = null;
     }
   };
 
@@ -514,6 +573,8 @@ export default function ProductsAdmin() {
     selection.removeAllRanges();
     selection.addRange(range);
     descriptionSelectionRef.current = range.cloneRange();
+    hasDescriptionSelectionRef.current = true;
+    hasManualDescriptionSelectionRef.current = false;
     return true;
   };
 
@@ -524,7 +585,7 @@ export default function ProductsAdmin() {
     editor.focus();
     const selection = window.getSelection();
     const savedRange = descriptionSelectionRef.current;
-    if (!selection || !savedRange || !isDescriptionRangeValid(savedRange)) {
+    if (!selection || !hasDescriptionSelectionRef.current || !savedRange || !isDescriptionRangeValid(savedRange)) {
       return moveDescriptionCaretToEnd();
     }
 
@@ -537,31 +598,60 @@ export default function ProductsAdmin() {
     const editor = descriptionEditorRef.current;
     if (!editor) return;
 
-    if (!restoreDescriptionSelection()) return;
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    pushDescriptionUndoSnapshot();
+    editor.focus();
 
-    const range = selection.getRangeAt(0);
+    const range = document.createRange();
+    const anchor = descriptionInsertAnchorRef.current;
+    if (anchor && editor.contains(anchor)) {
+      range.setStartAfter(anchor);
+    } else if (hasManualDescriptionSelectionRef.current && descriptionSelectionRef.current && isDescriptionRangeValid(descriptionSelectionRef.current)) {
+      range.setStart(descriptionSelectionRef.current.startContainer, descriptionSelectionRef.current.startOffset);
+      range.setEnd(descriptionSelectionRef.current.endContainer, descriptionSelectionRef.current.endOffset);
+    } else {
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+
     range.deleteContents();
 
-    const fragment = range.createContextualFragment(html);
+    const fragment = range.createContextualFragment(`${html}<br>`);
     const lastInsertedNode = fragment.lastChild;
     range.insertNode(fragment);
 
+    const selection = window.getSelection();
     if (lastInsertedNode && editor.contains(lastInsertedNode)) {
       const nextRange = document.createRange();
       nextRange.setStartAfter(lastInsertedNode);
       nextRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(nextRange);
+      selection?.removeAllRanges();
+      selection?.addRange(nextRange);
       descriptionSelectionRef.current = nextRange.cloneRange();
+      hasDescriptionSelectionRef.current = true;
+      hasManualDescriptionSelectionRef.current = false;
+      descriptionInsertAnchorRef.current = lastInsertedNode;
     }
 
     syncDescriptionFromEditor(false);
+    descriptionCustomUndoIsLatestRef.current = true;
   };
 
   const normalizeDescriptionEditorAfterInput = () => {
+    descriptionCustomUndoIsLatestRef.current = false;
+    descriptionInsertAnchorRef.current = null;
     syncDescriptionFromEditor(false);
+  };
+
+  const handleDescriptionEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === "z" && !event.shiftKey) {
+      if (undoDescriptionEditorChange()) event.preventDefault();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (key === "y" || (key === "z" && event.shiftKey))) {
+      if (redoDescriptionEditorChange()) event.preventDefault();
+    }
   };
 
   const insertFormatting = (type: "bold" | "italic" | "align-left" | "align-center" | "align-right" | "align-justify" | "image" | "bullet" | "heading" | "link" | "undo" | "redo") => {
@@ -570,10 +660,10 @@ export default function ProductsAdmin() {
 
       switch (type) {
         case "undo":
-          document.execCommand("undo");
+          if (!undoDescriptionEditorChange()) document.execCommand("undo");
           break;
         case "redo":
-          document.execCommand("redo");
+          if (!redoDescriptionEditorChange()) document.execCommand("redo");
           break;
         case "bold":
           document.execCommand("bold");
@@ -854,7 +944,6 @@ export default function ProductsAdmin() {
         }
       }
 
-      showToast(`Đã tải ${urls.length} ảnh lên Cloudinary.`, "success");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể tải ảnh lên Cloudinary.";
       showToast(message, "error");
@@ -868,7 +957,6 @@ export default function ProductsAdmin() {
 
     if (descriptionEditorRef.current && !isToolbarPreviewMode) {
       insertHtmlIntoDescriptionEditor(`<img src="${url.trim()}" alt="${alt.replace(/"/g, "&quot;")}" class="my-5 h-auto w-full object-contain border border-white/10 bg-black p-3" referrerPolicy="no-referrer" />`);
-      showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
       return;
     }
 
@@ -878,7 +966,6 @@ export default function ProductsAdmin() {
       description: prev.description ? `${prev.description}\n${markdownImage}` : markdownImage,
     }));
     setIsToolbarPreviewMode(false);
-    showToast("Đã chèn ảnh vào mô tả sản phẩm.", "success");
   };
 
   const handleDescriptionPaste = (event: React.ClipboardEvent<HTMLDivElement> | ClipboardEvent) => {
@@ -892,7 +979,6 @@ export default function ProductsAdmin() {
       if (sanitizedHtml) {
         event.preventDefault();
         insertHtmlIntoDescriptionEditor(sanitizedHtml);
-        showToast("Da dan noi dung tu Word vao mo ta.", "success");
       }
       return;
     }
@@ -2112,10 +2198,10 @@ export default function ProductsAdmin() {
                       contentEditable
                       suppressContentEditableWarning
                       data-placeholder="Nhap hoac dan mo ta tu Word/Excel vao day..."
-                      onInput={() => syncDescriptionFromEditor(false)}
+                      onInput={normalizeDescriptionEditorAfterInput}
+                      onKeyDown={handleDescriptionEditorKeyDown}
                       onKeyUp={rememberDescriptionSelection}
                       onMouseUp={rememberDescriptionSelection}
-                      onFocus={rememberDescriptionSelection}
                       onPaste={handleDescriptionPaste}
                       title="Trình soạn thảo mô tả sản phẩm"
                       onBlur={() => syncDescriptionFromEditor(true)}
