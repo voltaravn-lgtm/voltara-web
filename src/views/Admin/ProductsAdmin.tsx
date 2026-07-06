@@ -534,12 +534,30 @@ export default function ProductsAdmin() {
   };
 
   const insertHtmlIntoDescriptionEditor = (html: string) => {
-    if (!descriptionEditorRef.current) return;
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
 
     if (!restoreDescriptionSelection()) return;
-    document.execCommand("insertHTML", false, html);
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+
+    const fragment = range.createContextualFragment(html);
+    const lastInsertedNode = fragment.lastChild;
+    range.insertNode(fragment);
+
+    if (lastInsertedNode && editor.contains(lastInsertedNode)) {
+      const nextRange = document.createRange();
+      nextRange.setStartAfter(lastInsertedNode);
+      nextRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(nextRange);
+      descriptionSelectionRef.current = nextRange.cloneRange();
+    }
+
     syncDescriptionFromEditor(false);
-    rememberDescriptionSelection();
   };
 
   const normalizeDescriptionEditorAfterInput = () => {
@@ -1406,7 +1424,7 @@ export default function ProductsAdmin() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-6 space-y-4">
+            <form id="product-admin-form" onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-6 pb-8 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 <div className="space-y-1">
@@ -2140,7 +2158,7 @@ export default function ProductsAdmin() {
               </div>
 
               {/* Form triggers */}
-              <div className="pt-4 border-t border-[#1A1A1A] flex justify-end gap-3">
+              <div className="hidden">
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
@@ -2158,6 +2176,24 @@ export default function ProductsAdmin() {
               </div>
 
             </form>
+
+            <div className="shrink-0 border-t border-[#1A1A1A] bg-[#080808]/95 px-6 py-4 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsProductModalOpen(false)}
+                className="px-5 py-3 border border-white/5 text-xs font-display text-gray-400 font-bold tracking-widest uppercase hover:text-white transition-all cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                form="product-admin-form"
+                className="gold-gradient-bg text-black font-display font-bold py-3 px-6 text-xs tracking-widest uppercase hover:opacity-90 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                Lưu sản phẩm
+              </button>
+            </div>
           </div>
         </div>
       )}
