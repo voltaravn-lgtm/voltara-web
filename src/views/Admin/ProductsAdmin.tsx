@@ -315,6 +315,19 @@ export default function ProductsAdmin() {
     scroller.scrollTop += event.deltaY;
   };
 
+  const restoreProductFormScroll = (scrollTop: number) => {
+    const restore = () => {
+      if (productFormScrollRef.current) {
+        productFormScrollRef.current.scrollTop = scrollTop;
+      }
+    };
+
+    restore();
+    requestAnimationFrame(restore);
+    window.setTimeout(restore, 0);
+    window.setTimeout(restore, 120);
+  };
+
   const getCategoryDisplayName = (categoryId?: string, subCategoryId?: string) => {
     const category = productCategories.find((item) => item.id === categoryId);
     const child = category?.children?.find((item) => item.id === subCategoryId);
@@ -990,10 +1003,13 @@ export default function ProductsAdmin() {
     files: FileList | null,
     target: "main" | "gallery" | "description",
   ) => {
+    const scrollTopBeforeUpload = productFormScrollRef.current?.scrollTop || 0;
+
     if (!files || files.length === 0) return;
 
     if (!isCloudinaryConfigured()) {
       showToast("Chưa cấu hình Cloudinary. Thêm NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME và NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.", "warning");
+      restoreProductFormScroll(scrollTopBeforeUpload);
       return;
     }
 
@@ -1041,6 +1057,7 @@ export default function ProductsAdmin() {
       showToast(message, "error");
     } finally {
       setUploadingImageTarget(null);
+      restoreProductFormScroll(scrollTopBeforeUpload);
     }
   };
 
@@ -1928,14 +1945,17 @@ export default function ProductsAdmin() {
                 <div className="col-span-1 sm:col-span-2 space-y-1">
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A]">Đường dẫn ảnh Đại diện chính</label>
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className={`inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest border cursor-pointer transition-colors ${uploadingImageTarget === "main" ? "border-gold-light text-gold-light" : "border-gold-dark/40 text-gold-light hover:border-gold-light"}`}>
+                    <label
+                      onMouseDown={(event) => event.preventDefault()}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest border cursor-pointer transition-colors ${uploadingImageTarget === "main" ? "border-gold-light text-gold-light" : "border-gold-dark/40 text-gold-light hover:border-gold-light"}`}
+                    >
                       {uploadingImageTarget === "main" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                       <span>{uploadingImageTarget === "main" ? "Đang tải..." : "Tải ảnh từ máy"}</span>
                       <input
                         type="file"
                         accept="image/*"
                         multiple
-                        className="sr-only"
+                        className="hidden"
                         disabled={Boolean(uploadingImageTarget)}
                         onChange={(e) => {
                           handleCloudinaryUpload(e.target.files, "main");
@@ -1972,14 +1992,17 @@ export default function ProductsAdmin() {
 
                 <div className="col-span-1 sm:col-span-2 space-y-1">
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Đường dẫn ảnh bổ sung (mỗi đường dẫn ảnh đặt trên một dòng)</label>
-                  <label className={`inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest border cursor-pointer transition-colors ${uploadingImageTarget === "gallery" ? "border-gold-light text-gold-light" : "border-white/15 text-gray-300 hover:border-gold-light hover:text-gold-light"}`}>
+                  <label
+                    onMouseDown={(event) => event.preventDefault()}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest border cursor-pointer transition-colors ${uploadingImageTarget === "gallery" ? "border-gold-light text-gold-light" : "border-white/15 text-gray-300 hover:border-gold-light hover:text-gold-light"}`}
+                  >
                     {uploadingImageTarget === "gallery" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                     <span>{uploadingImageTarget === "gallery" ? "Đang tải..." : "Tải ảnh bổ sung"}</span>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
-                      className="sr-only"
+                      className="hidden"
                       disabled={Boolean(uploadingImageTarget)}
                       onChange={(e) => {
                         handleCloudinaryUpload(e.target.files, "gallery");
@@ -2289,6 +2312,7 @@ export default function ProductsAdmin() {
                         <ImageIcon className="w-3.5 h-3.5" />
                       </button>
                       <label
+                        onMouseDown={(event) => event.preventDefault()}
                         className="p-1 hover:bg-gold-dark/20 text-gray-400 hover:text-gold-light transition-colors cursor-pointer"
                         title="Tải ảnh và chèn vào mô tả"
                       >
@@ -2301,7 +2325,7 @@ export default function ProductsAdmin() {
                           type="file"
                           accept="image/*"
                           multiple
-                          className="sr-only"
+                          className="hidden"
                           disabled={Boolean(uploadingImageTarget)}
                           onChange={(e) => {
                             handleCloudinaryUpload(e.target.files, "description");
