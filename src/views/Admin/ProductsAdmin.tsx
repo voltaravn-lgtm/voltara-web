@@ -1593,8 +1593,8 @@ export default function ProductsAdmin() {
 
       {/* POPUP MODAL */}
       {isProductModalOpen && (
-        <div id="product-admin-modal" className="fixed inset-0 bg-black z-50 flex min-h-0 overflow-hidden" onWheel={handleProductModalWheel}>
-          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full h-full min-h-0 overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
+        <div id="product-admin-modal" className="fixed inset-0 bg-black/95 z-50 flex min-h-0 overflow-hidden px-3 lg:px-6" onWheel={handleProductModalWheel}>
+          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full max-w-6xl mx-auto h-full min-h-0 overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
             <div className="shrink-0 px-4 py-4 sm:px-6 border-b border-white/5 flex items-center justify-between">
               <h2 className="text-sm font-display font-black tracking-widest text-[#F5C45A] uppercase flex items-center gap-2">
                 <Battery className="w-4 h-4 text-gold-light" />
