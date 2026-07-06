@@ -2,9 +2,9 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Script from "next/script";
 import ProductDetailClient from "../../../components/ProductDetailClient";
-import { getBuildProducts } from "../../../lib/productData";
+import { findBuildProductByRoute, getBuildProducts } from "../../../lib/productData";
 import { getProductDescriptionExcerpt } from "../../../lib/productDescription";
-import { getProductSlug, slugifyProductText } from "../../../lib/productRoutes";
+import { getProductSlug } from "../../../lib/productRoutes";
 import { buildMetadata, siteUrl } from "../../../lib/seo";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../../lib/video";
 
@@ -14,17 +14,8 @@ interface ProductDetailPageProps {
   }>;
 }
 
-export const dynamicParams = false;
-
-async function findProductByRoute(id: string) {
-  const products = await getBuildProducts();
-  const normalizedId = slugifyProductText(id);
-  return products.find((item) =>
-    item.id === id ||
-    slugifyProductText(item.id) === normalizedId ||
-    getProductSlug(item) === normalizedId
-  ) || null;
-}
+export const dynamicParams = true;
+export const revalidate = 300;
 
 export async function generateStaticParams() {
   const products = await getBuildProducts();
@@ -39,7 +30,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: ProductDetailPageProps): Promise<Metadata> {
   const { id } = await params;
-  const product = await findProductByRoute(id);
+  const product = await findBuildProductByRoute(id);
 
   if (!product) {
     return buildMetadata({
@@ -61,7 +52,7 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
 
 export default async function ProductDetailPage({ params }: ProductDetailPageProps) {
   const { id } = await params;
-  const product = await findProductByRoute(id);
+  const product = await findBuildProductByRoute(id);
 
   if (!product) {
     notFound();

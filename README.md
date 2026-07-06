@@ -20,7 +20,7 @@ Run:
 
 `npm run build`
 
-The project is configured for static export with output in `dist`.
+The project is configured for Next.js SSR/ISR. Deploy it to a Next.js server runtime such as Vercel, Firebase App Hosting, Netlify Next Runtime, or Cloud Run.
 
 ## Firebase
 

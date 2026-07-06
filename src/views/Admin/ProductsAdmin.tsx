@@ -3,6 +3,7 @@ import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
 import { getProductDescriptionExcerpt } from "../../lib/productDescription";
+import { getProductSlug, slugifyProductText } from "../../lib/productRoutes";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../lib/video";
 import {
   Battery, Plus, Edit, Trash2, X, Save, Copy,
@@ -22,6 +23,7 @@ const defaultSpecTemplate: Product["specs"] = {
 
 const createBlankProductForm = (id = ""): Partial<Product> => ({
   id,
+  slug: "",
   name: "",
   voltage: "",
   capacity: "",
@@ -400,6 +402,16 @@ export default function ProductsAdmin() {
   specs: cleanProductSpecs(productForm.specs),
 } as Product;
     currentForm.id = currentForm.id.trim();
+    currentForm.slug = slugifyProductText(currentForm.slug || `${currentForm.name}-${currentForm.id}`);
+    const slugOwner = products.find((product) =>
+      product.id !== editingProduct?.id &&
+      getProductSlug(product) === currentForm.slug
+    );
+
+    if (slugOwner) {
+      showToast("Slug URL sản phẩm bị trùng! Hãy đổi slug khác.", "error");
+      return;
+    }
 
     if (editingProduct) {
       const originalId = editingProduct.id;
@@ -1419,12 +1431,18 @@ export default function ProductsAdmin() {
             >
               <div className={`flex items-start gap-4 ${adminViewMode === "list" ? "flex-1 min-w-0" : ""}`}>
                 <div className={`${adminViewMode === "grid" ? "w-16 h-16" : "w-12 h-12"} bg-[#111] border border-[#222] p-1 flex items-center justify-center shrink-0`}>
-                  <img
-                    src={prod.image}
-                    alt={prod.name}
-                    className="max-h-full max-w-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
+                  {prod.image ? (
+                    <img
+                      src={prod.image}
+                      alt={prod.name}
+                      className="max-h-full max-w-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="px-1 text-center text-[9px] font-display font-bold uppercase leading-tight text-gray-600">
+                      Chua co anh
+                    </span>
+                  )}
                 </div>
                 <div className={`space-y-1 min-w-0 ${adminViewMode === "list" ? "flex-1" : ""}`}>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1533,6 +1551,29 @@ export default function ProductsAdmin() {
                     onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
                     className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none"
                   />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Slug URL SEO</label>
+                    <button
+                      type="button"
+                      onClick={() => setProductForm(prev => ({ ...prev, slug: slugifyProductText(`${prev.name || ""}-${prev.id || ""}`) }))}
+                      className="text-[9px] font-display font-bold uppercase tracking-wider text-gold-light hover:text-white"
+                    >
+                      Tự tạo slug
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={productForm.slug || ""}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, slug: slugifyProductText(e.target.value) }))}
+                    placeholder="tu-dong-tao-tu-ten-va-id-neu-de-trong"
+                    className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    URL: /san-pham/{productForm.slug || slugifyProductText(`${productForm.name || ""}-${productForm.id || ""}`) || "slug-san-pham"}
+                  </p>
                 </div>
 
                 <div className="space-y-1">

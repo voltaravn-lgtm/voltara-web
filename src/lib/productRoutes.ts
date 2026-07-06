@@ -13,6 +13,9 @@ export function slugifyProductText(value: string) {
 }
 
 export function getProductSlug(product: Product) {
+  const explicitSlug = product.slug?.trim() ? slugifyProductText(product.slug) : "";
+  if (explicitSlug) return explicitSlug;
+
   const nameSlug = slugifyProductText(product.name || product.id);
   const idSlug = slugifyProductText(product.id);
   if (!idSlug || nameSlug.includes(idSlug)) return nameSlug;

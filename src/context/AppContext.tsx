@@ -7,6 +7,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
 import { Product, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
+import { getProductSlug } from "../lib/productRoutes";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
 import { auth, db, isFirebaseConfigured } from "../lib/firebase";
 import { isAdminEmail } from "../lib/adminAuth";
@@ -964,6 +965,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProduct = async (updatedProduct: Product) => {
     const nextProduct = {
       ...updatedProduct,
+      slug: updatedProduct.slug || getProductSlug(updatedProduct),
       createdAt: updatedProduct.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -983,6 +985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addProduct = async (newProduct: Product) => {
     const nextProduct = {
       ...newProduct,
+      slug: newProduct.slug || getProductSlug(newProduct),
       createdAt: newProduct.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
