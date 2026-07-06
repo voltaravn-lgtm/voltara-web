@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
+import { getProductDescriptionExcerpt } from "../../lib/productDescription";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../lib/video";
 import {
   Battery, Plus, Edit, Trash2, X, Save, Copy,
@@ -370,7 +371,7 @@ export default function ProductsAdmin() {
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productForm.id || !productForm.name) {
+    if (!productForm.id?.trim() || !productForm.name) {
       showToast("Vui lòng điền đầy đủ ID và Tên sản phẩm!", "warning");
       return;
     }
@@ -384,9 +385,26 @@ export default function ProductsAdmin() {
   hidden: productForm.hidden ?? false,
   specs: cleanProductSpecs(productForm.specs),
 } as Product;
+    currentForm.id = currentForm.id.trim();
 
     if (editingProduct) {
-      updateProduct(currentForm);
+      const originalId = editingProduct.id;
+      const nextId = currentForm.id;
+      const isChangingId = nextId !== originalId;
+
+      if (isChangingId && products.some((product) => product.id === nextId)) {
+        showToast("ID Sản phẩm bị trùng lặp! Hãy đổi ID khác.", "error");
+        return;
+      }
+
+      currentForm.id = nextId;
+
+      if (isChangingId) {
+        addProduct(currentForm);
+        deleteProduct(originalId);
+      } else {
+        updateProduct(currentForm);
+      }
       showToast("Đã lưu chỉnh sửa sản phẩm thành công!", "success");
     } else {
       if (products.some(p => p.id === currentForm.id)) {
@@ -1319,7 +1337,9 @@ export default function ProductsAdmin() {
                     <span className="text-gray-500 font-mono uppercase">{getCategoryDisplayName(prod.category, prod.subCategory)}</span>
                   </div>
                   {adminViewMode === "grid" && (
-                    <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{prod.description}</p>
+                    <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">
+                      {getProductDescriptionExcerpt(prod.description, prod.name, 140)}
+                    </p>
                   )}
 
                 </div>
@@ -1394,10 +1414,9 @@ export default function ProductsAdmin() {
                   <input
                     type="text"
                     required
-                    disabled={!!editingProduct}
                     value={productForm.id}
                     onChange={(e) => setProductForm(prev => ({ ...prev, id: e.target.value }))}
-                    className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono disabled:opacity-50"
+                    className="w-full bg-black border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono"
                   />
                 </div>
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Script from "next/script";
 import ProductDetailClient from "../../../components/ProductDetailClient";
 import { getBuildProducts } from "../../../lib/productData";
+import { getProductDescriptionExcerpt } from "../../../lib/productDescription";
 import { getProductSlug, slugifyProductText } from "../../../lib/productRoutes";
 import { buildMetadata, siteUrl } from "../../../lib/seo";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../../lib/video";
@@ -48,9 +49,11 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
     });
   }
 
+  const description = getProductDescriptionExcerpt(product.description, product.name);
+
   return buildMetadata({
     title: `${product.name} - Voltara`,
-    description: product.description,
+    description,
     path: `/san-pham/${getProductSlug(product)}`,
     image: product.image,
   });
@@ -71,13 +74,14 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const productVideos = cleanVideoUrls(product.videoUrls)
     .map((url, index) => getProductVideoEmbed(url, index))
     .filter(Boolean);
+  const plainDescription = getProductDescriptionExcerpt(product.description, product.name);
 
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
     image: [product.image],
-    description: product.description,
+    description: plainDescription,
     brand: {
       "@type": "Brand",
       name: product.brand || "Voltara",
@@ -100,7 +104,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
           video: productVideos.map((video, index) => ({
             "@type": "VideoObject",
             name: `${product.name} - Video ${index + 1}`,
-            description: product.description,
+            description: plainDescription,
             thumbnailUrl: [product.image],
             uploadDate: product.updatedAt || product.createdAt || new Date().toISOString(),
             embedUrl: video?.embedUrl,

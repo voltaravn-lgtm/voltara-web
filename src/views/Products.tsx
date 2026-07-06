@@ -13,6 +13,7 @@ import { getProductHref } from "../lib/productRoutes";
 import { getMenuBanner } from "../lib/menuBanners";
 import ProductDetailClient from "../components/ProductDetailClient";
 import ProductPromoImage from "../components/ProductPromoImage";
+import { getProductDescriptionExcerpt } from "../lib/productDescription";
 
 const PRODUCTS_PAGE_SIZE = 12;
 
@@ -594,7 +595,7 @@ export default function Products() {
                           {prod.name}
                         </h3>
                         <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-                          {prod.description}
+                          {getProductDescriptionExcerpt(prod.description, prod.name, 150)}
                         </p>
                       </div>
                       <span className="text-[10px] font-display font-bold text-gold-light hover:text-white uppercase shrink-0">
