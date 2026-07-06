@@ -1565,9 +1565,9 @@ export default function ProductsAdmin() {
 
       {/* POPUP MODAL */}
       {isProductModalOpen && (
-        <div id="product-admin-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 lg:p-6 overflow-hidden">
-          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-full max-w-6xl max-h-[92vh] overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
-            <div className="shrink-0 p-6 border-b border-white/5 flex items-center justify-between">
+        <div id="product-admin-modal" className="fixed inset-0 bg-black z-50 flex overflow-hidden">
+          <div className="bg-[#0A0A0A] border border-gold-dark/40 w-screen h-[100dvh] max-h-[100dvh] overflow-hidden shadow-[0_15px_50px_rgba(216,154,43,0.15)] flex flex-col">
+            <div className="shrink-0 px-4 py-4 sm:px-6 border-b border-white/5 flex items-center justify-between">
               <h2 className="text-sm font-display font-black tracking-widest text-[#F5C45A] uppercase flex items-center gap-2">
                 <Battery className="w-4 h-4 text-gold-light" />
                 {editingProduct ? "CHỈNH SỬA SẢN PHẨM" : "THÊM SẢN PHẨM MỚI"}
@@ -1580,7 +1580,7 @@ export default function ProductsAdmin() {
               </button>
             </div>
 
-            <form id="product-admin-form" onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-6 pb-8 space-y-4">
+            <form id="product-admin-form" onSubmit={handleSaveProduct} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:p-6 sm:pb-8 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 <div className="space-y-1">
@@ -2398,7 +2398,7 @@ export default function ProductsAdmin() {
 
             </form>
 
-            <div className="shrink-0 border-t border-[#1A1A1A] bg-[#080808]/95 px-6 py-4 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <div className="shrink-0 border-t border-[#1A1A1A] bg-[#080808]/95 px-4 py-3 sm:px-6 sm:py-4 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={() => setIsProductModalOpen(false)}
