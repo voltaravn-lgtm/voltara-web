@@ -237,6 +237,12 @@ export default function ProductsAdmin() {
     (images || [])
       .map((imageUrl) => String(imageUrl || "").trim())
       .filter(Boolean);
+  const cleanProductSpecs = (specs: Partial<Product>["specs"]): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries(specs || {})
+        .map(([key, value]) => [key.trim(), String(value || "").trim()])
+        .filter(([key, value]) => Boolean(key && value)),
+    ) as Record<string, string>;
 
   const galleryImageUrls = cleanImageUrls(productForm.images);
   const quickInsertImages = Array.from(new Set([productForm.image, ...galleryImageUrls].filter((imageUrl): imageUrl is string => Boolean(imageUrl))));
@@ -244,6 +250,7 @@ export default function ProductsAdmin() {
   const productVideoEmbeds = productVideoUrls
     .map((videoUrl, index) => getProductVideoEmbed(videoUrl, index))
     .filter(Boolean);
+  const visibleSpecEntries = Object.entries(cleanProductSpecs(productForm.specs));
 
   useEffect(() => {
     if (!isProductModalOpen) return;
@@ -375,6 +382,7 @@ export default function ProductsAdmin() {
   description: getDescriptionEditorHtml() || productForm.description,
   subCategory: activeProductSubCategories.length > 0 ? productForm.subCategory || "" : "",
   hidden: productForm.hidden ?? false,
+  specs: cleanProductSpecs(productForm.specs),
 } as Product;
 
     if (editingProduct) {
@@ -949,12 +957,14 @@ export default function ProductsAdmin() {
   };
 
   const handleAddSpecItem = () => {
-    if (!newSpecKey || !newSpecValue) return;
+    const specKey = newSpecKey.trim();
+    const specValue = newSpecValue.trim();
+    if (!specKey || !specValue) return;
     setProductForm(prev => ({
       ...prev,
       specs: {
         ...(prev.specs || {}),
-        [newSpecKey]: newSpecValue
+        [specKey]: specValue,
       }
     }));
     setNewSpecKey("");
@@ -1728,7 +1738,7 @@ export default function ProductsAdmin() {
                 {/* Dynamic specs builder */}
                 <div className="col-span-1 sm:col-span-2 border border-[#1A1A1A] p-4 bg-black/50 space-y-3">
                   <p className="text-[10px] text-gray-500">
-                    Copy bang 2 cot tu Word/Excel roi dan vao o ten thong so hoac gia tri de nhap hang loat.
+                    Copy bang 2 cot tu Word/Excel roi dan vao o ten thong so hoac gia tri de nhap hang loat. Dong nao khong co gia tri se tu an va khong luu.
                   </p>
                   <span className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A] block leading-none">Thong so ky thuat di kem</span>
                   
@@ -1759,7 +1769,7 @@ export default function ProductsAdmin() {
                   </div>
 
                   <div className="space-y-1.5 pt-2">
-                    {Object.entries(productForm.specs || {}).map(([key, value]) => (
+                    {visibleSpecEntries.length > 0 ? visibleSpecEntries.map(([key, value]) => (
                       <div key={key} className="grid grid-cols-1 sm:grid-cols-[220px_1fr_auto] items-center gap-2 bg-black/80 px-3 py-2 text-xs text-gray-300 border border-[#1D1D1D]">
                         <span className="text-[10px] text-gray-500 font-bold uppercase">{key}:</span>
                         <input
@@ -1777,7 +1787,11 @@ export default function ProductsAdmin() {
                           Xoa
                         </button>
                       </div>
-                    ))}
+                    )) : (
+                      <p className="border border-dashed border-white/10 bg-black/40 px-3 py-3 text-[10px] text-gray-500">
+                        Chua co thong so nao co gia tri. Khi can them, nhap ten thong so va gia tri o phia tren.
+                      </p>
+                    )}
                   </div>
                 </div>
 

@@ -6,6 +6,7 @@ interface ProductPromoImageProps {
   alt: string;
   imgClassName?: string;
   className?: string;
+  showOverlay?: boolean;
 }
 
 function classNames(...items: Array<string | false | undefined>) {
@@ -29,9 +30,9 @@ function getOverlaySizingClasses(imgClassName = "") {
   return classNames(...sizeClasses, "object-contain");
 }
 
-export default function ProductPromoImage({ src, alt, imgClassName, className }: ProductPromoImageProps) {
+export default function ProductPromoImage({ src, alt, imgClassName, className, showOverlay = true }: ProductPromoImageProps) {
   const { promoOverlaySettings } = useApp();
-  const active = isPromoOverlayActive(
+  const active = showOverlay && isPromoOverlayActive(
     promoOverlaySettings.enabled,
     promoOverlaySettings.imageUrl,
     promoOverlaySettings.endDate,

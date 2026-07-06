@@ -130,6 +130,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                     alt={currentProduct.name}
                     className="relative z-10"
                     imgClassName="h-full w-full object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.7)]"
+                    showOverlay={activeImageIndex === 0}
                   />
                   {gallery.length > 1 && (
                     <>
