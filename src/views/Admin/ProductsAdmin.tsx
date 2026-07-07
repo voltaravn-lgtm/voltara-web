@@ -205,6 +205,73 @@ export function formatDescriptionToHtml(desc: string | undefined): string {
   return html;
 }
 
+function productDescriptionToExportText(description: string | undefined) {
+  if (!description) return "";
+
+  const html = formatDescriptionToHtml(description);
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  doc.body.querySelectorAll("script, style, meta, link, object, iframe, img").forEach((node) => node.remove());
+
+  const blockTags = new Set([
+    "ADDRESS",
+    "ARTICLE",
+    "ASIDE",
+    "BLOCKQUOTE",
+    "DIV",
+    "FIGCAPTION",
+    "FIGURE",
+    "FOOTER",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "HEADER",
+    "MAIN",
+    "NAV",
+    "P",
+    "SECTION",
+  ]);
+
+  const renderNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || "";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+
+    const element = node as HTMLElement;
+    const tagName = element.tagName.toUpperCase();
+    const childText = Array.from(element.childNodes).map(renderNode).join("");
+
+    if (tagName === "BR") return "\n";
+    if (tagName === "LI") return `- ${childText.trim()}\n`;
+    if (tagName === "TD" || tagName === "TH") return `${childText.trim()}\t`;
+    if (tagName === "TR") return `${childText.replace(/\t+$/g, "").trim()}\n`;
+    if (tagName === "UL" || tagName === "OL" || tagName === "TABLE" || tagName === "TBODY" || tagName === "THEAD") {
+      return `${childText.trim()}\n`;
+    }
+    if (blockTags.has(tagName)) return `${childText.trim()}\n\n`;
+
+    return childText;
+  };
+
+  return Array.from(doc.body.childNodes)
+    .map(renderNode)
+    .join("")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function ProductsAdmin() {
   const {
     products,
@@ -1267,7 +1334,7 @@ export default function ProductsAdmin() {
       ["Anh dai dien", (product) => product.image],
       ["Anh bo sung", (product) => (product.images || []).join("\n")],
       ["Video", (product) => (product.videoUrls || []).join("\n")],
-      ["Mo ta", (product) => product.description],
+      ["Mo ta", (product) => productDescriptionToExportText(product.description)],
       ["Thong so ky thuat", (product) => formatSpecsForExport(product.specs)],
       ["Ngay tao", (product) => product.createdAt],
       ["Ngay cap nhat", (product) => product.updatedAt],
