@@ -68,6 +68,8 @@ export default function PromoOverlayPage(): React.ReactElement {
   const [eventEndDate, setEventEndDate] = useState(promoOverlaySettings.endDate || "");
   const [savingEventOverlay, setSavingEventOverlay] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [productDropActive, setProductDropActive] = useState(false);
+  const [overlayDropActive, setOverlayDropActive] = useState(false);
   const [exportSize, setExportSize] = useState<ExportSize>(800);
   const [quality, setQuality] = useState<number>(82);
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("white");
@@ -108,6 +110,10 @@ export default function PromoOverlayPage(): React.ReactElement {
   const updateActiveProduct = (changes: Partial<Pick<ProductItem, "scale" | "offset">>) => {
     if (!activeProduct) return;
     setProducts((current) => current.map((item) => (item.id === activeProduct.id ? { ...item, ...changes } : item)));
+  };
+
+  const resetFileInput = (inputRef: React.RefObject<HTMLInputElement | null>) => {
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const drawBackground = (ctx: CanvasRenderingContext2D, size: number, preview = false) => {
@@ -208,27 +214,40 @@ export default function PromoOverlayPage(): React.ReactElement {
 
   const onProductFiles = async (files: FileList | null) => {
     const selectedFiles = Array.from(files || []).filter((file) => /^image\/(png|jpeg|webp)$/.test(file.type));
+    resetFileInput(productInputRef);
     if (!selectedFiles.length) return;
 
-    const loadedProducts = await Promise.all(selectedFiles.map(async (file) => {
-      const asset = await loadFileAsImage(file);
-      return {
-        ...asset,
-        id: uid(),
-        scale: 1,
-        offset: { x: 0, y: 0 },
-      };
-    }));
+    try {
+      const loadedProducts = await Promise.all(selectedFiles.map(async (file) => {
+        const asset = await loadFileAsImage(file);
+        return {
+          ...asset,
+          id: uid(),
+          scale: 1,
+          offset: { x: 0, y: 0 },
+        };
+      }));
 
-    setProducts((current) => [...current, ...loadedProducts]);
-    setActiveProductId((current) => current || loadedProducts[0]?.id || null);
+      setProducts((current) => [...current, ...loadedProducts]);
+      setActiveProductId((current) => current || loadedProducts[0]?.id || null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể thêm ảnh sản phẩm.";
+      showToast(message, "error");
+    }
   };
 
   const onOverlayFiles = async (files: FileList | null) => {
     const file = files?.[0];
+    resetFileInput(overlayInputRef);
     if (!file || file.type !== "image/png") return;
-    if (overlay) URL.revokeObjectURL(overlay.url);
-    setOverlay(await loadFileAsImage(file));
+
+    try {
+      if (overlay) URL.revokeObjectURL(overlay.url);
+      setOverlay(await loadFileAsImage(file));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể thêm khung overlay.";
+      showToast(message, "error");
+    }
   };
 
   const fileToDataUrl = (file: File): Promise<string> => {
@@ -466,18 +485,25 @@ export default function PromoOverlayPage(): React.ReactElement {
       }
       const next = current.filter((item) => item.id !== id);
       if (activeProductId === id) setActiveProductId(next[0]?.id || null);
+      resetFileInput(productInputRef);
       return next;
     });
   };
 
-  const onClearAll = () => {
+  const clearProducts = () => {
     products.forEach((product) => URL.revokeObjectURL(product.url));
-    if (overlay) URL.revokeObjectURL(overlay.url);
     productImgRefs.current.clear();
-    overlayImgRef.current = null;
     setProducts([]);
     setActiveProductId(null);
+    resetFileInput(productInputRef);
+  };
+
+  const onClearAll = () => {
+    clearProducts();
+    if (overlay) URL.revokeObjectURL(overlay.url);
+    overlayImgRef.current = null;
     setOverlay(null);
+    resetFileInput(overlayInputRef);
   };
 
   return (
@@ -510,7 +536,10 @@ export default function PromoOverlayPage(): React.ReactElement {
                 subtitle="JPG, PNG hoặc WebP, chọn được nhiều ảnh"
                 fileName={products.length ? `${products.length} ảnh đã chọn` : undefined}
                 buttonText="Thêm ảnh"
+                dropActive={productDropActive}
                 onClick={() => productInputRef.current?.click()}
+                onDropFiles={(files) => onProductFiles(files)}
+                onDropActiveChange={setProductDropActive}
               />
               <UploadBox
                 icon={<Layers className="h-5 w-5" />}
@@ -519,7 +548,10 @@ export default function PromoOverlayPage(): React.ReactElement {
                 fileName={overlay?.file.name}
                 buttonText="Chọn khung"
                 secondary
+                dropActive={overlayDropActive}
                 onClick={() => overlayInputRef.current?.click()}
+                onDropFiles={(files) => onOverlayFiles(files)}
+                onDropActiveChange={setOverlayDropActive}
               />
             </div>
 
@@ -640,6 +672,16 @@ export default function PromoOverlayPage(): React.ReactElement {
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h2 className="font-display text-xs font-black uppercase tracking-widest text-white">Danh sách ảnh sản phẩm</h2>
                   <span className="text-[11px] text-gray-500">{products.length} ảnh</span>
+                </div>
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={clearProducts}
+                    className="inline-flex h-8 items-center justify-center gap-1.5 border border-red-500/25 px-3 text-[10px] font-display font-bold uppercase tracking-widest text-red-300 transition-colors hover:border-red-400 hover:bg-red-500 hover:text-white"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Xóa tất cả
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {products.map((item, index) => (
@@ -794,22 +836,57 @@ export default function PromoOverlayPage(): React.ReactElement {
   );
 }
 
-function UploadBox({ icon, title, subtitle, fileName, buttonText, secondary, onClick }: {
+function UploadBox({ icon, title, subtitle, fileName, buttonText, secondary, dropActive, onClick, onDropFiles, onDropActiveChange }: {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   fileName?: string;
   buttonText: string;
   secondary?: boolean;
+  dropActive?: boolean;
   onClick: () => void;
+  onDropFiles?: (files: FileList) => void;
+  onDropActiveChange?: (active: boolean) => void;
 }) {
+  const canDrop = Boolean(onDropFiles);
+
   return (
-    <div className="border border-white/5 bg-[#0B0B0B] p-4">
+    <div
+      className={classNames(
+        "border bg-[#0B0B0B] p-4 transition-colors",
+        dropActive ? "border-gold-light bg-gold-dark/10" : "border-white/5",
+      )}
+      onDragEnter={(event) => {
+        if (!canDrop) return;
+        event.preventDefault();
+        onDropActiveChange?.(true);
+      }}
+      onDragOver={(event) => {
+        if (!canDrop) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        onDropActiveChange?.(true);
+      }}
+      onDragLeave={(event) => {
+        if (!canDrop) return;
+        const nextTarget = event.relatedTarget;
+        if (!nextTarget || !event.currentTarget.contains(nextTarget as Node)) {
+          onDropActiveChange?.(false);
+        }
+      }}
+      onDrop={(event) => {
+        if (!canDrop) return;
+        event.preventDefault();
+        onDropActiveChange?.(false);
+        onDropFiles?.(event.dataTransfer.files);
+      }}
+    >
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-gold-dark/30 bg-gold-dark/10 text-gold-light">{icon}</div>
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-xs font-black uppercase tracking-widest text-white">{title}</h2>
           <p className="mt-1 text-[11px] text-gray-500">{subtitle}</p>
+          <p className="mt-1 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light">Kéo thả ảnh vào đây</p>
           <p className="mt-2 truncate text-[11px] font-mono text-gray-400">{fileName || "Chưa chọn file"}</p>
         </div>
       </div>
