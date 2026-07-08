@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, Send, ShoppingCart, ShieldCheck, MapPin, Phone, User, FileText, Package } from "lucide-react";
+import { X, Send, ShoppingCart, ShieldCheck, MapPin, Phone, User, FileText, Minus, Plus } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { QuoteRequest } from "../types";
 
@@ -8,12 +8,15 @@ interface OrderRequestModalProps {
   onClose: () => void;
   productName: string;
   variantName?: string;
+  comboName?: string;
+  comboDescription?: string;
+  comboOriginalPrice?: string;
   productPrice: string;
   productSku?: string;
   productId?: string;
 }
 
-export default function OrderRequestModal({ isOpen, onClose, productName, variantName, productPrice, productSku, productId }: OrderRequestModalProps) {
+export default function OrderRequestModal({ isOpen, onClose, productName, variantName, comboName, comboDescription, comboOriginalPrice, productPrice, productSku, productId }: OrderRequestModalProps) {
   const { addQuoteRequest, showToast } = useApp();
   const [isSuccess, setIsSuccess] = useState(false);
   const [form, setForm] = useState({
@@ -33,6 +36,18 @@ export default function OrderRequestModal({ isOpen, onClose, productName, varian
 
   if (!isOpen) return null;
 
+  const quantity = Math.max(1, Math.floor(Number(form.quantity) || 1));
+  const unitPriceValue = parsePriceNumber(productPrice);
+  const originalPriceValue = parsePriceNumber(comboOriginalPrice);
+  const shouldShowOriginalPrice = Boolean(originalPriceValue && unitPriceValue && originalPriceValue > unitPriceValue);
+  const unitPriceLabel = productPrice || "Liên hệ";
+  const totalPriceLabel = unitPriceValue ? formatPriceNumber(unitPriceValue * quantity) : unitPriceLabel;
+  const totalOriginalPriceLabel = shouldShowOriginalPrice && originalPriceValue ? formatPriceNumber(originalPriceValue * quantity) : "";
+
+  const updateQuantity = (nextQuantity: number) => {
+    setForm((prev) => ({ ...prev, quantity: String(Math.max(1, Math.floor(nextQuantity || 1))) }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -48,17 +63,21 @@ export default function OrderRequestModal({ isOpen, onClose, productName, varian
       email: form.email,
       province: form.province || "Chưa cung cấp",
       address: form.address,
-      productName: variantName ? `${productName} - ${variantName}` : productName,
+      productName: [productName, variantName, comboName].filter(Boolean).join(" - "),
       batteryType: "Đặt hàng sản phẩm có giá",
       voltage: "Không áp dụng",
       capacity: "Không áp dụng",
       notes: [
         productId ? `Product ID: ${productId}` : "",
-        variantName ? `Phan loai: ${variantName}` : "",
+        variantName ? `Phân loại: ${variantName}` : "",
+        comboName ? `Combo: ${comboName}` : "",
+        comboDescription ? `Thành phần combo: ${comboDescription}` : "",
         productSku ? `SKU: ${productSku}` : "",
+        totalOriginalPriceLabel ? `Giá gốc: ${totalOriginalPriceLabel}` : "",
         `Loại yêu cầu: Đặt hàng`,
-        `Giá hiển thị: ${productPrice || "Không rõ"}`,
-        `Số lượng: ${form.quantity || "1"}`,
+        `Đơn giá: ${unitPriceLabel}`,
+        `Số lượng: ${quantity}`,
+        `Tổng tiền: ${totalPriceLabel}`,
         form.notes ? `Ghi chú: ${form.notes}` : "",
       ].filter(Boolean).join("\n"),
       date: new Date().toISOString(),
@@ -124,9 +143,24 @@ export default function OrderRequestModal({ isOpen, onClose, productName, varian
                   <FileText className="w-4 h-4 mt-0.5 text-gray-400 shrink-0" />
                   <div>
                     <div className="text-white font-display font-bold text-xs uppercase tracking-wide">{productName}</div>
-                    {variantName && <div className="mt-1 text-[10px] font-display font-bold uppercase tracking-wider text-gold-light">Phan loai: {variantName}</div>}
-                    {productPrice && <div className="mt-1 text-gold-light font-display font-black text-sm">{productPrice}</div>}
+                    {variantName && <div className="mt-1 text-[10px] font-display font-bold uppercase tracking-wider text-gold-light">Phân loại: {variantName}</div>}
+                    {comboName && <div className="mt-1 text-[10px] font-display font-bold uppercase tracking-wider text-gold-light">Combo: {comboName}</div>}
+                    {comboDescription && <div className="mt-1 text-[10px] leading-relaxed text-gray-400">{comboDescription}</div>}
+                    {totalOriginalPriceLabel && <div className="mt-1 text-[11px] font-semibold text-gray-500 line-through">{totalOriginalPriceLabel}</div>}
+                    <div className="mt-1 text-gold-light font-display font-black text-sm">{totalPriceLabel}</div>
+                    {quantity > 1 && unitPriceValue && (
+                      <div className="mt-1 text-[10px] text-gray-500">Đơn giá: {unitPriceLabel} x {quantity}</div>
+                    )}
                     {productSku && <div className="mt-1 text-[10px] font-mono uppercase text-gray-500">SKU: {productSku}</div>}
+                  </div>
+                  <div className="ml-auto flex shrink-0 items-center border border-white/10 bg-black">
+                    <button type="button" onClick={() => updateQuantity(quantity - 1)} className="p-2 text-gray-400 transition-colors hover:text-white" aria-label="Giảm số lượng">
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="w-9 text-center text-xs font-bold text-white">{quantity}</span>
+                    <button type="button" onClick={() => updateQuantity(quantity + 1)} className="p-2 text-gray-400 transition-colors hover:text-white" aria-label="Tăng số lượng">
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -148,8 +182,23 @@ export default function OrderRequestModal({ isOpen, onClose, productName, varian
                 <Field label="Tỉnh / thành" icon={<MapPin className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />}>
                   <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className={inputClass("pl-9")} placeholder="Hồ Chí Minh, Hà Nội..." />
                 </Field>
-                <Field label="Số lượng" icon={<Package className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />}>
-                  <input value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className={inputClass("pl-9")} placeholder="1" />
+                <Field label="Số lượng">
+                  <div className="flex overflow-hidden rounded-md border border-white/10 bg-[#141414] focus-within:border-gold-dark">
+                    <button type="button" onClick={() => updateQuantity(quantity - 1)} className="px-3 text-gray-400 transition-colors hover:text-white" aria-label="Giảm số lượng">
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.quantity}
+                      onChange={(e) => updateQuantity(Number(e.target.value))}
+                      className="w-full bg-transparent px-3 py-2 text-center text-xs font-bold text-white focus:outline-none"
+                      placeholder="1"
+                    />
+                    <button type="button" onClick={() => updateQuantity(quantity + 1)} className="px-3 text-gray-400 transition-colors hover:text-white" aria-label="Tăng số lượng">
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
                 </Field>
               </div>
 
@@ -192,4 +241,13 @@ function Field({ label, required, icon, children }: { label: string; required?: 
 
 function inputClass(extra = "") {
   return `w-full bg-[#141414] border border-white/10 focus:border-gold-dark px-3 py-2 text-xs text-white focus:outline-none rounded-md ${extra}`;
+}
+
+function parsePriceNumber(price: string | undefined): number {
+  const digits = String(price || "").replace(/[^\d]/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+function formatPriceNumber(value: number): string {
+  return `${Math.max(0, Math.round(value)).toLocaleString("vi-VN")}đ`;
 }

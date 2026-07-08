@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
-import { Product, ProductVariant } from "../../types";
+import { Product, ProductVariant, ProductCombo } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
 import { getProductDescriptionExcerpt } from "../../lib/productDescription";
 import { getProductSlug, slugifyProductText } from "../../lib/productRoutes";
@@ -39,6 +39,7 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   price: "",
   salePrice: "",
   variants: [],
+  combos: [],
   sku: "",
   barcode: "",
   stockQuantity: "",
@@ -275,6 +276,7 @@ function productDescriptionToExportText(description: string | undefined) {
 export default function ProductsAdmin() {
   const {
     products,
+    salesPrograms,
     productCategories,
     setProductCategories,
     addProduct,
@@ -290,6 +292,8 @@ export default function ProductsAdmin() {
   const [uploadingImageTarget, setUploadingImageTarget] = useState<string | null>(null);
   const [adminViewMode, setAdminViewMode] = useState<"grid" | "list">("grid");
   const [isCategoryPanelOpen, setIsCategoryPanelOpen] = useState(false);
+  const [isComboPanelOpen, setIsComboPanelOpen] = useState(false);
+  const [comboProductQueries, setComboProductQueries] = useState<Record<number, string>>({});
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productVisibilityFilter, setProductVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -334,6 +338,45 @@ export default function ProductsAdmin() {
         stockStatus: (variant.stockStatus || "") as ProductVariant["stockStatus"],
       }))
       .filter((variant) => Boolean(variant.name));
+  const getProductRawPrice = (productId: string) => {
+    const product = products.find((item) => item.id === productId);
+    return product?.salePrice || product?.price || "";
+  };
+  const parsePriceValue = (value: string | undefined) => {
+    const numeric = String(value || "").replace(/[^\d]/g, "");
+    return numeric ? Number(numeric) : 0;
+  };
+  const formatAdminPrice = (value: number) => value ? String(value) : "";
+  const getComboOriginalPrice = (combo: ProductCombo) =>
+    (combo.items || []).reduce((total, item) => {
+      const quantity = Math.max(1, Number(item.quantity || 1));
+      return total + parsePriceValue(getProductRawPrice(item.productId)) * quantity;
+    }, 0);
+  const cleanProductCombos = (combos: Partial<Product>["combos"]): ProductCombo[] =>
+    (combos || [])
+      .map((combo, index) => {
+        const items = (combo.items || [])
+          .map((item) => ({
+            productId: String(item.productId || "").trim(),
+            quantity: Math.max(1, Number(item.quantity || 1)),
+          }))
+          .filter((item) => Boolean(item.productId));
+        const calculatedOriginalPrice = getComboOriginalPrice({ ...combo, items } as ProductCombo);
+        return {
+          id: String(combo.id || `combo-${index + 1}`).trim() || `combo-${index + 1}`,
+          name: String(combo.name || "").trim(),
+          items,
+          originalPrice: String(combo.originalPrice || formatAdminPrice(calculatedOriginalPrice)).trim(),
+          comboPrice: String(combo.comboPrice || "").trim(),
+          description: String(combo.description || "").trim(),
+          sku: String(combo.sku || "").trim(),
+          image: String(combo.image || "").trim(),
+          startsAt: String(combo.startsAt || "").trim(),
+          endsAt: String(combo.endsAt || "").trim(),
+          hidden: combo.hidden ?? false,
+        };
+      })
+      .filter((combo) => Boolean(combo.name));
 
   const galleryImageUrls = cleanImageUrls(productForm.images);
   const quickInsertImages = Array.from(new Set([productForm.image, ...galleryImageUrls].filter((imageUrl): imageUrl is string => Boolean(imageUrl))));
@@ -343,6 +386,12 @@ export default function ProductsAdmin() {
     .filter(Boolean);
   const visibleSpecEntries = Object.entries(cleanProductSpecs(productForm.specs));
   const productVariants = cleanProductVariants(productForm.variants);
+  const productCombos = cleanProductCombos(productForm.combos);
+  const getProductSalesProgramCount = (productId: string) =>
+    salesPrograms.filter((program) =>
+      program.type === "combo" &&
+      (program.primaryProductId === productId || (!program.primaryProductId && (program.items || []).some((item) => item.productId === productId)))
+    ).length;
 
   useEffect(() => {
     if (!isProductModalOpen) return;
@@ -410,7 +459,7 @@ export default function ProductsAdmin() {
       return [...prev, { id, name: name.toUpperCase(), children: [] }];
     });
     setNewCategoryName("");
-    showToast("Da them danh muc san pham.", "success");
+    showToast("Đã thêm danh mục sản phẩm.", "success");
   };
 
   const handleUpdateProductCategory = (categoryId: string, updates: Partial<ProductCategory>) => {
@@ -422,8 +471,8 @@ export default function ProductsAdmin() {
   const handleDeleteProductCategory = (categoryId: string) => {
     const usedCount = products.filter((product) => product.category === categoryId).length;
     const message = usedCount
-      ? `Danh muc nay dang co ${usedCount} san pham. Xoa danh muc khong xoa san pham, nhung san pham se can gan lai danh muc. Ban van muon xoa?`
-      : "Ban co chac muon xoa danh muc nay?";
+      ? `Danh mục này đang có ${usedCount} sản phẩm. Xóa danh mục không xóa sản phẩm, nhưng sản phẩm sẽ cần gán lại danh mục. Bạn vẫn muốn xóa?`
+      : "Bạn có chắc muốn xóa danh mục này?";
     if (!window.confirm(message)) return;
     setProductCategories((prev) => prev.filter((category) => category.id !== categoryId));
   };
@@ -444,7 +493,7 @@ export default function ProductsAdmin() {
       })
     );
     setNewChildCategoryNames((prev) => ({ ...prev, [categoryId]: "" }));
-    showToast("Da them danh muc con.", "success");
+    showToast("Đã thêm danh mục con.", "success");
   };
 
   const handleUpdateChildCategory = (
@@ -466,8 +515,8 @@ export default function ProductsAdmin() {
   const handleDeleteChildCategory = (categoryId: string, childId: string) => {
     const usedCount = products.filter((product) => product.category === categoryId && product.subCategory === childId).length;
     const message = usedCount
-      ? `Danh muc con nay dang co ${usedCount} san pham. Ban van muon xoa?`
-      : "Ban co chac muon xoa danh muc con nay?";
+      ? `Danh mục con này đang có ${usedCount} sản phẩm. Bạn vẫn muốn xóa?`
+      : "Bạn có chắc muốn xóa danh mục con này?";
     if (!window.confirm(message)) return;
     setProductCategories((prev) =>
       prev.map((category) => {
@@ -485,6 +534,7 @@ export default function ProductsAdmin() {
     descriptionUndoStackRef.current = [];
     descriptionRedoStackRef.current = [];
     descriptionCustomUndoIsLatestRef.current = false;
+    setComboProductQueries({});
 
     if (product) {
       setEditingProduct(product);
@@ -494,6 +544,7 @@ export default function ProductsAdmin() {
         images: product.images || [],
         videoUrls: product.videoUrls || [],
         variants: product.variants || [],
+        combos: product.combos || [],
         subCategory: product.subCategory || "",
         hidden: product.hidden ?? false,
         syncChannel: product.syncChannel || (product.haravanProductId || product.haravanVariantId ? "haravan" : ""),
@@ -521,6 +572,7 @@ export default function ProductsAdmin() {
   images: galleryImageUrls,
   videoUrls: productVideoUrls,
   variants: productVariants,
+  combos: productCombos,
   description: getDescriptionEditorHtml() || productForm.description,
   subCategory: activeProductSubCategories.length > 0 ? productForm.subCategory || "" : "",
   hidden: productForm.hidden ?? false,
@@ -618,6 +670,96 @@ export default function ProductsAdmin() {
     setProductForm(prev => ({
       ...prev,
       variants: (prev.variants || []).filter((_, variantIndex) => variantIndex !== index),
+    }));
+  };
+
+  const handleAddCombo = () => {
+    setProductForm(prev => ({
+      ...prev,
+      combos: [
+        ...(prev.combos || []),
+        {
+          id: `combo-${Date.now()}`,
+          name: "",
+          originalPrice: "",
+          comboPrice: "",
+          description: "",
+          sku: "",
+          image: "",
+          startsAt: "",
+          endsAt: "",
+          items: [{ productId: prev.id || "", quantity: 1 }].filter((item) => Boolean(item.productId)),
+          hidden: false,
+        },
+      ],
+    }));
+  };
+
+  const handleUpdateCombo = (index: number, updates: Partial<ProductCombo>) => {
+    setProductForm(prev => ({
+      ...prev,
+      combos: (prev.combos || []).map((combo, comboIndex) =>
+        comboIndex === index ? { ...combo, ...updates } : combo
+      ),
+    }));
+  };
+
+  const handleRemoveCombo = (index: number) => {
+    setProductForm(prev => ({
+      ...prev,
+      combos: (prev.combos || []).filter((_, comboIndex) => comboIndex !== index),
+    }));
+  };
+
+  const handleAddProductToCombo = (comboIndex: number, productId: string) => {
+    const normalizedId = productId.trim();
+    const product = products.find((item) => item.id === normalizedId);
+    if (!product) {
+      showToast("Không tìm thấy mã sản phẩm để ghép combo.", "warning");
+      return;
+    }
+
+    setProductForm(prev => ({
+      ...prev,
+      combos: (prev.combos || []).map((combo, index) => {
+        if (index !== comboIndex) return combo;
+        const items = combo.items || [];
+        const nextItems = items.some((item) => item.productId === normalizedId)
+          ? items.map((item) => item.productId === normalizedId ? { ...item, quantity: Math.max(1, Number(item.quantity || 1)) + 1 } : item)
+          : [...items, { productId: normalizedId, quantity: 1 }];
+        const originalPrice = formatAdminPrice(getComboOriginalPrice({ ...combo, items: nextItems } as ProductCombo));
+        return {
+          ...combo,
+          items: nextItems,
+          originalPrice,
+          name: combo.name || `Combo ${product.name}`,
+        };
+      }),
+    }));
+    setComboProductQueries((prev) => ({ ...prev, [comboIndex]: "" }));
+  };
+
+  const handleUpdateComboItemQuantity = (comboIndex: number, productId: string, quantity: number) => {
+    setProductForm(prev => ({
+      ...prev,
+      combos: (prev.combos || []).map((combo, index) => {
+        if (index !== comboIndex) return combo;
+        const items = (combo.items || []).map((item) =>
+          item.productId === productId ? { ...item, quantity: Math.max(1, Math.floor(quantity || 1)) } : item
+        );
+        return { ...combo, items, originalPrice: formatAdminPrice(getComboOriginalPrice({ ...combo, items } as ProductCombo)) };
+      }),
+    }));
+  };
+
+  const handleRemoveComboItem = (comboIndex: number, productId: string) => {
+    setProductForm(prev => ({
+      ...prev,
+      combos: (prev.combos || []).map((combo, index) => {
+        if (index !== comboIndex) return combo;
+        const items = (combo.items || []).filter((item) => item.productId !== productId);
+        return { ...combo, items, originalPrice: formatAdminPrice(getComboOriginalPrice({ ...combo, items } as ProductCombo)) };
+      }),
     }));
   };
 
@@ -1068,7 +1210,7 @@ export default function ProductsAdmin() {
 
   const handleCloudinaryUpload = async (
     files: FileList | null,
-    target: "main" | "gallery" | "description",
+    target: "main" | "gallery" | "description" | `combo-${number}`,
   ) => {
     const scrollTopBeforeUpload = productFormScrollRef.current?.scrollTop || 0;
 
@@ -1117,6 +1259,16 @@ export default function ProductsAdmin() {
             description: prev.description ? `${prev.description}\n${imageHtml}` : imageHtml,
           }));
         }
+      }
+
+      if (target.startsWith("combo-")) {
+        const comboIndex = Number(target.replace("combo-", ""));
+        setProductForm(prev => ({
+          ...prev,
+          combos: (prev.combos || []).map((combo, index) =>
+            index === comboIndex ? { ...combo, image: urls[0] } : combo
+          ),
+        }));
       }
 
     } catch (error) {
@@ -1305,39 +1457,49 @@ export default function ProductsAdmin() {
   const handleExportProductsExcel = () => {
     const exportRows = filteredAdminProducts.length ? filteredAdminProducts : products;
     if (!exportRows.length) {
-      showToast("Chua co san pham de xuat file.", "warning");
+      showToast("Chưa có sản phẩm để xuất file.", "warning");
       return;
     }
 
     const columns: Array<[string, (product: Product) => unknown]> = [
       ["ID", (product) => product.id],
-      ["Ten san pham", (product) => product.name],
-      ["Danh muc", (product) => product.category],
-      ["Danh muc con", (product) => product.subCategory],
-      ["Thuong hieu", (product) => product.brand],
-      ["Dien ap", (product) => product.voltage],
-      ["Dung luong", (product) => product.capacity],
+      ["Tên sản phẩm", (product) => product.name],
+      ["Danh mục", (product) => product.category],
+      ["Danh mục con", (product) => product.subCategory],
+      ["Thương hiệu", (product) => product.brand],
+      ["Điện áp", (product) => product.voltage],
+      ["Dung lượng", (product) => product.capacity],
       ["Cell", (product) => product.cellType],
-      ["Bao hanh", (product) => product.warranty],
-      ["Gia ban", (product) => product.price],
-      ["Gia giam", (product) => product.salePrice],
+      ["Bảo hành", (product) => product.warranty],
+      ["Giá bán", (product) => product.price],
+      ["Giá giảm", (product) => product.salePrice],
+      ["Combo", (product) => (product.combos || []).map((combo) => [
+        combo.hidden ? "[Ẩn]" : "[Hiện]",
+        combo.name,
+        (combo.items || []).length ? `Items: ${(combo.items || []).map((item) => `${item.productId} x${item.quantity || 1}`).join(", ")}` : "",
+        combo.originalPrice ? `Giá gốc: ${combo.originalPrice}` : "",
+        combo.comboPrice ? `Giá combo: ${combo.comboPrice}` : "",
+        combo.startsAt ? `Bắt đầu: ${combo.startsAt}` : "",
+        combo.endsAt ? `Kết thúc: ${combo.endsAt}` : "",
+        combo.description,
+      ].filter(Boolean).join(" | ")).join("\n")],
       ["SKU", (product) => product.sku],
       ["Barcode", (product) => product.barcode],
-      ["So ton", (product) => product.stockQuantity],
-      ["Trang thai kho", (product) => product.stockStatus],
-      ["Cho dong bo", (product) => product.syncEnabled ? "Co" : "Khong"],
-      ["Kenh dong bo", (product) => product.syncChannel],
+      ["Số tồn", (product) => product.stockQuantity],
+      ["Trạng thái kho", (product) => product.stockStatus],
+      ["Cho đồng bộ", (product) => product.syncEnabled ? "Có" : "Không"],
+      ["Kênh đồng bộ", (product) => product.syncChannel],
       ["External Product ID", (product) => product.externalProductId || product.haravanProductId],
       ["External Variant ID", (product) => product.externalVariantId || product.haravanVariantId],
-      ["Lan dong bo gan nhat", (product) => product.lastSyncedAt],
-      ["Trang thai hien thi", (product) => product.hidden ? "Dang an" : "Dang hien"],
-      ["Anh dai dien", (product) => product.image],
-      ["Anh bo sung", (product) => (product.images || []).join("\n")],
+      ["Lần đồng bộ gần nhất", (product) => product.lastSyncedAt],
+      ["Trạng thái hiển thị", (product) => product.hidden ? "Đang ẩn" : "Đang hiện"],
+      ["Ảnh đại diện", (product) => product.image],
+      ["Ảnh bổ sung", (product) => (product.images || []).join("\n")],
       ["Video", (product) => (product.videoUrls || []).join("\n")],
-      ["Mo ta", (product) => productDescriptionToExportText(product.description)],
-      ["Thong so ky thuat", (product) => formatSpecsForExport(product.specs)],
-      ["Ngay tao", (product) => product.createdAt],
-      ["Ngay cap nhat", (product) => product.updatedAt],
+      ["Mô tả", (product) => productDescriptionToExportText(product.description)],
+      ["Thông số kỹ thuật", (product) => formatSpecsForExport(product.specs)],
+      ["Ngày tạo", (product) => product.createdAt],
+      ["Ngày cập nhật", (product) => product.updatedAt],
     ];
 
     const headerCells = columns.map(([label]) => `<th>${escapeExcelCell(label)}</th>`).join("");
@@ -1355,7 +1517,7 @@ export default function ProductsAdmin() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    showToast(`Da xuat ${exportRows.length} san pham ra Excel.`, "success");
+    showToast(`Đã xuất ${exportRows.length} sản phẩm ra Excel.`, "success");
   };
 
   return (
@@ -1381,9 +1543,9 @@ export default function ProductsAdmin() {
       <div className="border border-gold-dark/20 bg-black/50 p-4 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Danh muc san pham</h3>
+            <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Danh mục sản phẩm</h3>
             <p className="mt-1 text-[10px] text-gray-500">
-              {productCategories.length} danh muc cha. Mo khi can them, sua, an/xoa danh muc.
+              {productCategories.length} danh mục cha. Mở khi cần thêm, sửa, ẩn/xóa danh mục.
             </p>
           </div>
           <button
@@ -1391,7 +1553,7 @@ export default function ProductsAdmin() {
             onClick={() => setIsCategoryPanelOpen((prev) => !prev)}
             className="inline-flex items-center justify-center gap-2 border border-gold-dark/35 px-4 py-2.5 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light transition-colors hover:border-gold-light hover:text-white"
           >
-            {isCategoryPanelOpen ? "Thu gon danh muc" : "Mo danh muc"}
+            {isCategoryPanelOpen ? "Thu gọn danh mục" : "Mở danh mục"}
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCategoryPanelOpen ? "rotate-90" : ""}`} />
           </button>
         </div>
@@ -1400,7 +1562,7 @@ export default function ProductsAdmin() {
           <>
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-t border-white/5 pt-4">
               <p className="max-w-xl text-[10px] text-gray-500">
-                Them, sua, an/xoa danh muc cha va danh muc con. Khi them san pham, neu danh muc cha co danh muc con thi se hien them o chon ben duoi.
+                Thêm, sửa, ẩn/xóa danh mục cha và danh mục con. Khi thêm sản phẩm, nếu danh mục cha có danh mục con thì sẽ hiện thêm ở chọn bên dưới.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[420px]">
             <input
@@ -1445,14 +1607,14 @@ export default function ProductsAdmin() {
                   onClick={() => handleUpdateProductCategory(category.id, { hidden: !category.hidden })}
                   className={`border px-3 py-2 text-[9px] font-display font-bold uppercase tracking-wider ${category.hidden ? "border-gray-700 text-gray-400" : "border-emerald-500/25 text-emerald-400"}`}
                 >
-                  {category.hidden ? "Dang an" : "Dang hien"}
+                  {category.hidden ? "Đang ẩn" : "Đang hiện"}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDeleteProductCategory(category.id)}
                   className="border border-red-500/20 bg-red-500/10 px-3 py-2 text-[9px] font-display font-bold uppercase tracking-wider text-red-400 hover:bg-red-500 hover:text-white"
                 >
-                  Xoa
+                  Xóa
                 </button>
               </div>
 
@@ -1468,7 +1630,7 @@ export default function ProductsAdmin() {
                         handleAddChildCategory(category.id);
                       }
                     }}
-                    placeholder="Ten danh muc con"
+                    placeholder="Tên danh mục con"
                     className="flex-1 bg-black border border-[#1A1A1A] text-xs px-3 py-2 text-[#ECECEC] focus:outline-none focus:border-gold-light"
                   />
                   <button
@@ -1476,7 +1638,7 @@ export default function ProductsAdmin() {
                     onClick={() => handleAddChildCategory(category.id)}
                     className="border border-gold-dark/40 px-3 py-2 text-[9px] font-display font-bold uppercase tracking-wider text-gold-light hover:border-gold-light"
                   >
-                    Them con
+                    Thêm con
                   </button>
                 </div>
 
@@ -1495,14 +1657,14 @@ export default function ProductsAdmin() {
                           onClick={() => handleUpdateChildCategory(category.id, child.id, { hidden: !child.hidden })}
                           className={`border px-2 py-2 text-[8.5px] font-display font-bold uppercase tracking-wider ${child.hidden ? "border-gray-700 text-gray-400" : "border-emerald-500/25 text-emerald-400"}`}
                         >
-                          {child.hidden ? "An" : "Hien"}
+                          {child.hidden ? "Ẩn" : "Hiện"}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteChildCategory(category.id, child.id)}
                           className="text-red-400 hover:text-white text-[9px] font-display font-bold uppercase"
                         >
-                          Xoa
+                          Xóa
                         </button>
                       </div>
                     ))}
@@ -1563,7 +1725,7 @@ export default function ProductsAdmin() {
               type="button"
               onClick={handleExportProductsExcel}
               className="flex items-center justify-center gap-1.5 px-3 border border-gold-dark/40 bg-black text-[10px] text-gold-light font-display font-bold uppercase tracking-widest hover:border-gold-light transition-colors"
-              title="Xuat file Excel san pham"
+              title="Xuất file Excel sản phẩm"
             >
               <Download className="w-3.5 h-3.5" />
               Excel
@@ -1604,7 +1766,7 @@ export default function ProductsAdmin() {
                     />
                   ) : (
                     <span className="px-1 text-center text-[9px] font-display font-bold uppercase leading-tight text-gray-600">
-                      Chua co anh
+                      Chưa có ảnh
                     </span>
                   )}
                 </div>
@@ -1612,6 +1774,11 @@ export default function ProductsAdmin() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[9px] font-mono text-gold-light tracking-wide bg-gold-dark/10 p-0.5">{[prod.voltage, prod.capacity].filter(Boolean).join(" / ")}</span>
                     <span className="text-[9px] text-gray-500 font-mono">ID: {prod.id}</span>
+                    {getProductSalesProgramCount(prod.id) > 0 && (
+                      <span className="text-[9px] font-display font-bold uppercase px-2 py-0.5 border border-gold-dark/35 bg-gold-dark/10 text-gold-light">
+                        Có combo ({getProductSalesProgramCount(prod.id)})
+                      </span>
+                    )}
                     <span className={`text-[9px] font-display font-bold uppercase px-2 py-0.5 border ${prod.hidden ? "text-gray-400 border-gray-700 bg-gray-900/60" : "text-emerald-400 border-emerald-500/20 bg-emerald-500/10"}`}>
                       {prod.hidden ? "Đang ẩn" : "Đang hiện"}
                     </span>
@@ -1802,12 +1969,12 @@ export default function ProductsAdmin() {
                 <div className="col-span-1 sm:col-span-2 border border-gold-dark/20 bg-[#080808] p-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Phan loai san pham</h3>
-                      <p className="mt-1 text-[10px] text-gray-500">Neu gia rieng de trong, phan loai se dung gia cua san pham chinh. Anh rieng se hien khi khach chon phan loai.</p>
+                      <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-[#F5C45A]">Phân loại sản phẩm</h3>
+                      <p className="mt-1 text-[10px] text-gray-500">Nếu giá riêng để trống, phân loại sẽ dùng giá của sản phẩm chính. Ảnh riêng sẽ hiện khi khách chọn phân loại.</p>
                     </div>
                     <button type="button" onClick={handleAddVariant} className="inline-flex items-center gap-1.5 border border-gold-dark/40 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light hover:border-gold-light hover:text-white">
                       <Plus className="w-3.5 h-3.5" />
-                      Them phan loai
+                      Thêm phân loại
                     </button>
                   </div>
                   {(productForm.variants || []).length > 0 ? (
@@ -1815,18 +1982,18 @@ export default function ProductsAdmin() {
                       {(productForm.variants || []).map((variant, index) => (
                         <div key={variant.id || index} className="border border-white/10 bg-black/70 p-3 space-y-3">
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Phan loai {index + 1}</span>
-                            <button type="button" onClick={() => handleRemoveVariant(index)} className="p-1.5 text-gray-500 hover:text-red-400" aria-label="Xoa phan loai">
+                            <span className="text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Phân loại {index + 1}</span>
+                            <button type="button" onClick={() => handleRemoveVariant(index)} className="p-1.5 text-gray-500 hover:text-red-400" aria-label="Xóa phân loại">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <input type="text" value={variant.name || ""} onChange={(e) => handleUpdateVariant(index, { name: e.target.value })} placeholder="Ten phan loai" className="md:col-span-2 w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
-                            <input type="text" value={variant.price || ""} onChange={(e) => handleUpdateVariant(index, { price: e.target.value })} placeholder={productForm.price || "Gia rieng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
-                            <input type="text" value={variant.salePrice || ""} onChange={(e) => handleUpdateVariant(index, { salePrice: e.target.value })} placeholder={productForm.salePrice || "Gia giam rieng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
-                            <input type="text" value={variant.sku || ""} onChange={(e) => handleUpdateVariant(index, { sku: e.target.value })} placeholder={productForm.sku || "SKU rieng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono" />
-                            <input type="number" min="0" value={variant.stockQuantity || ""} onChange={(e) => handleUpdateVariant(index, { stockQuantity: e.target.value })} placeholder="So ton" className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
-                            <input type="text" value={variant.image || ""} onChange={(e) => handleUpdateVariant(index, { image: e.target.value })} placeholder={productForm.image || "URL anh phan loai"} className="md:col-span-2 w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono" />
+                            <input type="text" value={variant.name || ""} onChange={(e) => handleUpdateVariant(index, { name: e.target.value })} placeholder="Tên phân loại" className="md:col-span-2 w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.price || ""} onChange={(e) => handleUpdateVariant(index, { price: e.target.value })} placeholder={productForm.price || "Giá riêng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.salePrice || ""} onChange={(e) => handleUpdateVariant(index, { salePrice: e.target.value })} placeholder={productForm.salePrice || "Giá giảm riêng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.sku || ""} onChange={(e) => handleUpdateVariant(index, { sku: e.target.value })} placeholder={productForm.sku || "SKU riêng"} className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono" />
+                            <input type="number" min="0" value={variant.stockQuantity || ""} onChange={(e) => handleUpdateVariant(index, { stockQuantity: e.target.value })} placeholder="Số tồn" className="w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none" />
+                            <input type="text" value={variant.image || ""} onChange={(e) => handleUpdateVariant(index, { image: e.target.value })} placeholder={productForm.image || "URL ảnh phân loại"} className="md:col-span-2 w-full bg-[#050505] border border-[#1A1A1A] focus:border-gold-light text-[#ECECEC] px-3.5 py-2.5 text-xs focus:outline-none font-mono" />
                           </div>
                           {variant.image && (
                             <div className="h-20 w-24 border border-white/10 bg-[#050505] p-1.5">
@@ -1837,7 +2004,7 @@ export default function ProductsAdmin() {
                       ))}
                     </div>
                   ) : (
-                    <div className="border border-dashed border-white/10 bg-black/40 px-4 py-5 text-[10px] text-gray-500">Chua co phan loai. San pham se hien mot gia va mot anh dai dien nhu hien tai.</div>
+                    <div className="border border-dashed border-white/10 bg-black/40 px-4 py-5 text-[10px] text-gray-500">Chưa có phân loại. Sản phẩm sẽ hiện một giá và một ảnh đại diện như hiện tại.</div>
                   )}
                 </div>
 
@@ -1929,7 +2096,7 @@ export default function ProductsAdmin() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Trang thai kho</label>
+                      <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">Trạng thái kho</label>
                       <select
                         value={productForm.stockStatus}
                         onChange={(e) => setProductForm(prev => ({ ...prev, stockStatus: e.target.value as Product["stockStatus"] }))}
@@ -2114,9 +2281,9 @@ export default function ProductsAdmin() {
                 {/* Dynamic specs builder */}
                 <div className="col-span-1 sm:col-span-2 border border-[#1A1A1A] p-4 bg-black/50 space-y-3">
                   <p className="text-[10px] text-gray-500">
-                    Copy bang 2 cot tu Word/Excel roi dan vao o ten thong so hoac gia tri de nhap hang loat. Dong nao khong co gia tri se tu an va khong luu.
+                    Copy bảng 2 cột từ Word/Excel rồi dán vào ô tên thông số hoặc giá trị để nhập hàng loạt. Dòng nào không có giá trị sẽ tự ẩn và không lưu.
                   </p>
-                  <span className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A] block leading-none">Thong so ky thuat di kem</span>
+                  <span className="text-[9px] font-display font-extrabold uppercase tracking-widest text-[#F5C45A] block leading-none">Thông số kỹ thuật đi kèm</span>
                   
                   <div className="flex flex-col sm:flex-row gap-3">
                     <input
@@ -2160,12 +2327,12 @@ export default function ProductsAdmin() {
                           onClick={() => handleRemoveSpecItem(key)}
                           className="justify-self-end text-red-400 hover:text-red-500 text-[10px] uppercase font-bold"
                         >
-                          Xoa
+                          Xóa
                         </button>
                       </div>
                     )) : (
                       <p className="border border-dashed border-white/10 bg-black/40 px-3 py-3 text-[10px] text-gray-500">
-                        Chua co thong so nao co gia tri. Khi can them, nhap ten thong so va gia tri o phia tren.
+                        Chưa có thông số nào có giá trị. Khi cần thêm, nhập tên thông số và giá trị ở phía trên.
                       </p>
                     )}
                   </div>
@@ -2173,7 +2340,7 @@ export default function ProductsAdmin() {
 
                 <div className="col-span-1 sm:col-span-2 space-y-2">
                   <label className="text-[9px] font-display font-extrabold uppercase tracking-widest text-gray-400">
-                    Video san pham (YouTube hoac link video, moi link mot dong)
+                    Video sản phẩm (YouTube hoặc link video, mỗi link một dòng)
                   </label>
                   <textarea
                     rows={3}
@@ -2189,7 +2356,7 @@ export default function ProductsAdmin() {
                     className="w-full bg-black border border-[#1A1A1A] text-xs px-3.5 py-2.5 text-[#ECECEC] focus:outline-none font-mono placeholder:text-gray-700 leading-relaxed resize-y"
                   />
                   <p className="text-[10px] text-gray-500">
-                    Ho tro YouTube, youtu.be, YouTube Shorts, link .mp4, .webm, .ogg. Link khac se hien nut mo video.
+                    Hỗ trợ YouTube, youtu.be, YouTube Shorts, link .mp4, .webm, .ogg. Link khác sẽ hiện nút mở video.
                   </p>
                   {productVideoEmbeds.length > 0 && (
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -2197,16 +2364,16 @@ export default function ProductsAdmin() {
                         <div key={`${video.originalUrl}-${index}`} className="border border-white/10 bg-black p-3">
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <span className="text-[9px] font-display font-bold uppercase tracking-widest text-gold-light">
-                              {video.provider === "youtube" ? "YouTube" : video.provider === "direct" ? "Video file" : "Link ngoai"}
+                              {video.provider === "youtube" ? "YouTube" : video.provider === "direct" ? "Video file" : "Link ngoài"}
                             </span>
                             <a href={video.originalUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] uppercase tracking-wider text-gray-500 hover:text-gold-light">
-                              Mo link
+                              Mở link
                             </a>
                           </div>
                           {video.embedUrl ? (
                             <iframe
                               src={video.embedUrl}
-                              title={`Video san pham ${index + 1}`}
+                              title={`Video sản phẩm ${index + 1}`}
                               className="aspect-video w-full border border-white/10 bg-[#050505]"
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                               allowFullScreen
@@ -2215,7 +2382,7 @@ export default function ProductsAdmin() {
                             <video controls src={video.directUrl} className="aspect-video w-full border border-white/10 bg-[#050505]" />
                           ) : (
                             <div className="flex aspect-video items-center justify-center border border-white/10 bg-[#050505] px-4 text-center text-[11px] text-gray-500">
-                              Link nay khong ho tro nhung truc tiep. Nguoi dung se mo video bang nut lien ket.
+                              Link này không hỗ trợ nhúng trực tiếp. Người dùng sẽ mở video bằng nút liên kết.
                             </div>
                           )}
                         </div>
@@ -2423,17 +2590,17 @@ export default function ProductsAdmin() {
                               <button
                                 type="button"
                                 onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => insertImageUrlToDescription(imageUrl, `${productForm.name || "Anh san pham"} ${index + 1}`)}
+                                onClick={() => insertImageUrlToDescription(imageUrl, `${productForm.name || "Ảnh sản phẩm"} ${index + 1}`)}
                                 className="w-full border border-white/10 px-2 py-1.5 text-[8.5px] font-display font-bold uppercase tracking-wider text-gray-300 transition-colors hover:border-gold-light hover:text-gold-light"
                               >
-                                Chen
+                                Chèn
                               </button>
                             </div>
                           ))}
                         </div>
                       ) : (
                         <p className="text-[10px] text-gray-500">
-                          Chua co anh dai dien hoac anh bo sung de chen nhanh.
+                          Chưa có ảnh đại diện hoặc ảnh bổ sung để chèn nhanh.
                         </p>
                       )}
                     </div>

@@ -36,6 +36,7 @@ export interface Product {
   createdAt?: string;
   updatedAt?: string;
   variants?: ProductVariant[];
+  combos?: ProductCombo[];
   specs: {
     [key: string]: string;
   };
@@ -52,6 +53,46 @@ export interface ProductVariant {
   stockStatus?: Product["stockStatus"];
 }
 
+export interface ProductCombo {
+  id: string;
+  name: string;
+  items?: ProductComboItem[];
+  originalPrice?: string;
+  comboPrice?: string;
+  description?: string;
+  sku?: string;
+  image?: string;
+  startsAt?: string;
+  endsAt?: string;
+  hidden?: boolean;
+}
+
+export interface ProductComboItem {
+  productId: string;
+  quantity?: number;
+}
+
+export type SalesProgramType = "combo" | "flash-sale" | "buy-x-get-y" | "quantity-discount";
+
+export interface SalesProgram {
+  id: string;
+  type: SalesProgramType;
+  name: string;
+  primaryProductId?: string;
+  items?: ProductComboItem[];
+  giftItems?: ProductComboItem[];
+  originalPrice?: string;
+  promoPrice?: string;
+  description?: string;
+  sku?: string;
+  image?: string;
+  startsAt?: string;
+  endsAt?: string;
+  hidden?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CartItem {
   productId: string;
   variantId?: string;
@@ -60,6 +101,12 @@ export interface CartItem {
   variantSalePrice?: string;
   variantSku?: string;
   variantImage?: string;
+  comboId?: string;
+  comboName?: string;
+  comboOriginalPrice?: string;
+  comboPrice?: string;
+  comboSku?: string;
+  comboImage?: string;
   quantity: number;
   addedAt: string;
 }

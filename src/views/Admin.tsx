@@ -10,7 +10,6 @@ import {
   Sliders, 
   Menu as MenuIcon, 
   Battery, 
-  RotateCcw, 
   Save, 
   Plus, 
   Trash2, 
@@ -30,12 +29,14 @@ import {
   Building,
   ShieldCheck,
   Calculator,
-  MapPin
+  MapPin,
+  Gift
 } from "lucide-react";
 
 import HomePageAdmin from "./Admin/HomePageAdmin";
 import AboutPageAdmin from "./Admin/AboutPageAdmin";
 import ProductsAdmin from "./Admin/ProductsAdmin";
+import SalesProgramsAdmin from "./Admin/SalesProgramsAdmin";
 import KnowledgeAdmin from "./Admin/KnowledgeAdmin";
 import AcademyAdmin from "./Admin/AcademyAdmin";
 import RecruitmentAdmin from "./Admin/RecruitmentAdmin";
@@ -55,7 +56,6 @@ export default function Admin() {
     setProducts,
     heroSettings,
     setHeroSettings,
-    resetToDefault,
     addProduct,
     updateProduct,
     deleteProduct,
@@ -68,7 +68,7 @@ export default function Admin() {
     deleteQuoteRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "homepage" | "aboutpage" | "recovery" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
+  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "salesPrograms" | "homepage" | "aboutpage" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
 
   // Hero config state & multi-slides control
   const [heroTitle, setHeroTitle] = useState(heroSettings.title);
@@ -306,6 +306,22 @@ export default function Admin() {
             </button>
 
             <button
+              id="admin-tab-sales-programs"
+              onClick={() => setActiveTab("salesPrograms")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
+                activeTab === "salesPrograms"
+                  ? "bg-gold-dark/10 border-gold-light text-gold-light shadow-[0_0_15px_rgba(216,154,43,0.15)]"
+                  : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <Gift className="w-4 h-4" />
+                Chương trình bán hàng
+              </span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "salesPrograms" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
               id="admin-tab-knowledge"
               onClick={() => setActiveTab("knowledge")}
               className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
@@ -481,22 +497,6 @@ export default function Admin() {
   <ChevronRight className="w-4 h-4" />
 </button>
 
-            <button
-              id="admin-tab-recovery"
-              onClick={() => setActiveTab("recovery")}
-              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
-                activeTab === "recovery"
-                  ? "bg-red-500/10 border-red-500 text-red-500"
-                  : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-red-500/30 hover:text-red-400"
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <RotateCcw className="w-4 h-4 px-0.5" />
-                Khôi phục mặc định
-              </span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            
             {/* Quick Helper guidelines */}
             <div className="mt-8 p-4 bg-[#0A0A0A] border border-[#1A1A1A] select-none text-[#F5C45A]">
               <div className="flex items-center gap-1.5 mb-2 font-display text-[10px] tracking-widest uppercase font-bold">
@@ -904,6 +904,8 @@ export default function Admin() {
             {/* T3. INVENTORY PRODUCTS MANAGEMENT */}
             {activeTab === "products" && <ProductsAdmin />}
 
+            {activeTab === "salesPrograms" && <SalesProgramsAdmin />}
+
             {/* T4. HOMEPAGE CONTENT EDITING */}
             {activeTab === "homepage" && <HomePageAdmin />}
 
@@ -938,33 +940,6 @@ export default function Admin() {
             {activeTab === "warranties" && <WarrantyAdmin />}
 
             {activeTab === "webp" && <WebpConverterAdmin />}
-
-            {/* T6. EMERGENCY SYSTEM RECOVERY */}
-            {activeTab === "recovery" && (
-              <div id="admin-recovery-tab" className="space-y-6 text-center py-10">
-                <div className="max-w-md mx-auto space-y-4">
-                  <div className="w-16 h-16 bg-red-500/5 border border-red-500/30 rounded-full flex items-center justify-center mx-auto text-red-500 animate-pulse">
-                    <RotateCcw className="w-8 h-8" />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h2 className="text-lg font-display font-black text-[#ECECEC] tracking-wider uppercase">KHÔI PHỤC TOÀN BỘ CÀI ĐẶT GỐC</h2>
-                    <p className="text-xs text-gray-400 leading-relaxed">
-                      Lựa chọn này sẽ dọn sạch toàn bộ trạng lưu động lưu trữ trong trình duyệt (localStorage) và trả mọi thông tin (Sản phẩm, Menu, Banner ảnh và thông tin của Hero) về trạng thái mặc định do hãng thiết kế ban đầu.
-                    </p>
-                  </div>
-
-                  <div className="pt-6">
-                    <button
-                      onClick={resetToDefault}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white font-display font-bold py-3.5 px-6 text-xs tracking-widest uppercase transition-all shadow-[0_4px_20px_rgba(239,68,68,0.25)] cursor-pointer"
-                    >
-                      BẮT ĐẦU KHÔI PHỤC CƠ SỞ DỮ LIỆU
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
           </div>
 

@@ -281,7 +281,7 @@ export default function Products() {
                   placeholder="Nhập từ khóa cần tìm..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent text-xs text-[#ECECEC] placeholder-gray-600 focus:outline-none w-full"
+                  className="w-full bg-transparent text-base text-[#ECECEC] placeholder-gray-600 focus:outline-none lg:text-xs"
                 />
               </div>
             </div>
@@ -382,7 +382,7 @@ export default function Products() {
                     placeholder="Tìm kiếm sản phẩm..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-transparent text-xs text-[#ECECEC] placeholder-gray-600 focus:outline-none w-full"
+                    className="w-full bg-transparent text-base text-[#ECECEC] placeholder-gray-600 focus:outline-none sm:text-xs"
                   />
                 </div>
 
@@ -538,7 +538,7 @@ export default function Products() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-black border border-white/10 text-[11px] text-[#ECECEC] h-8 px-2 rounded-md focus:outline-none focus:border-gold-light"
+                  className="h-9 rounded-md border border-white/10 bg-black px-2 text-base text-[#ECECEC] focus:border-gold-light focus:outline-none sm:h-8 sm:text-[11px]"
                 >
                   <option value="newest">Mới nhất trước</option>
                   <option value="oldest">Cũ nhất trước</option>

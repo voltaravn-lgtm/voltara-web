@@ -5,7 +5,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import { Zap, Award, ShieldCheck, Clock, ChevronRight, Eye, BookOpen, MapPin, Mail, Phone, Calendar, Star, Users, Briefcase } from "lucide-react";
+import { Zap, Award, ShieldCheck, Clock, ChevronRight, Eye, BookOpen, MapPin, Mail, Phone, Calendar, Star, Users, Briefcase, Gift, PlayCircle } from "lucide-react";
 import { Product, Solution, Article, Course, Job, Branch } from "../types";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
@@ -23,6 +23,17 @@ function formatDisplayPrice(price: string | undefined): string {
   }
 
   return raw;
+}
+
+function parsePriceNumber(price: string | undefined): number {
+  const digits = String(price || "").replace(/[^\d]/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+function isLowerPrice(price: string | undefined, originalPrice: string | undefined): boolean {
+  const priceValue = parsePriceNumber(price);
+  const originalValue = parsePriceNumber(originalPrice);
+  return Boolean(priceValue && originalValue && priceValue < originalValue);
 }
 
 // Dynamic Section Title block matching Voltara luxurious layout
@@ -84,11 +95,24 @@ export const StatCard: React.FC<{
 
 // Premium ProductCard matching the photos
 export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
+  const { salesPrograms } = useApp();
   const firstVariantWithPrice = (product.variants || []).find((variant) => variant.salePrice || variant.price);
   const regularPrice = formatDisplayPrice(firstVariantWithPrice?.price || product.price);
   const salePrice = formatDisplayPrice(firstVariantWithPrice?.salePrice || product.salePrice);
+  const hasDiscount = Boolean(salePrice && isLowerPrice(salePrice, regularPrice));
+  const displayPrice = salePrice || regularPrice;
   const hasVariants = Boolean(product.variants?.length);
+  const hasProductVideo = (product.videoUrls || []).some((url) => String(url || "").trim());
   const technicalSpecs = Object.entries(product.specs || {}).filter(([, value]) => String(value || "").trim());
+  const hasActiveCombo = salesPrograms.some((program) => {
+    if (program.type !== "combo" || program.hidden) return false;
+    const now = Date.now();
+    const startsAt = program.startsAt ? new Date(program.startsAt).getTime() : 0;
+    const endsAt = program.endsAt ? new Date(program.endsAt).getTime() : 0;
+    const isInTime = (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+    const hasProduct = program.primaryProductId === product.id || (program.items || []).some((item) => item.productId === product.id);
+    return isInTime && hasProduct;
+  });
 
   return (
     <Link
@@ -104,6 +128,12 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           </span>
         )}
       </div>
+      {hasActiveCombo && (
+        <div className="absolute right-2.5 top-2.5 z-10 inline-flex items-center gap-1.5 bg-gold-dark px-2.5 py-1 text-[9px] font-display font-black uppercase tracking-wider text-black shadow-[0_0_16px_rgba(216,154,43,0.35)]">
+          <Gift className="h-3.5 w-3.5" />
+          Combo ưu đãi
+        </div>
+      )}
 
       {/* Grid view layout */}
       <div className="relative w-full aspect-square bg-[#0A0A0A] overflow-hidden flex items-center justify-center p-0">
@@ -115,6 +145,11 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           alt={product.name}
           imgClassName="h-full w-full object-contain filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.6)] group-hover:scale-105 transition-transform duration-500"
         />
+        {hasProductVideo && (
+          <div className="absolute bottom-2.5 right-2.5 z-10 text-gold-light drop-shadow-[0_0_8px_rgba(0,0,0,0.9)]" title="Có video sản phẩm" aria-label="Có video sản phẩm">
+            <PlayCircle className="h-5 w-5" />
+          </div>
+        )}
       </div>
 
       <div className="p-3 sm:p-5 flex-1 flex flex-col justify-between border-t border-[#D89A2B]/20">
@@ -130,17 +165,23 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           </h3>
 
           <div className="mb-2 sm:mb-3 min-h-[30px] sm:min-h-[34px]">
-            {salePrice ? (
+            {hasDiscount ? (
               <div className="space-y-0.5">
-                <div className="text-xs sm:text-sm font-display font-black text-gold-light">{hasVariants ? "Tu " : ""}{salePrice}</div>
+                <div className="text-xs sm:text-sm font-display font-black text-gold-light">{hasVariants ? "Từ " : ""}{salePrice}</div>
                 {regularPrice && <div className="text-[10px] text-gray-500 line-through">{regularPrice}</div>}
               </div>
-            ) : regularPrice ? (
-              <div className="text-xs sm:text-sm font-display font-black text-gold-light">{hasVariants ? "Tu " : ""}{regularPrice}</div>
+            ) : displayPrice ? (
+              <div className="text-xs sm:text-sm font-display font-black text-gold-light">{hasVariants ? "Từ " : ""}{displayPrice}</div>
             ) : (
               <div className="text-xs font-display font-bold uppercase tracking-wider text-gray-500">Liên hệ</div>
             )}
           </div>
+          {hasActiveCombo && (
+            <div className="mb-3 inline-flex items-center gap-1.5 border border-gold-dark/30 bg-gold-dark/10 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-widest text-gold-light">
+              <Gift className="h-3 w-3" />
+              Có combo khuyến mãi
+            </div>
+          )}
 
           <div className="space-y-1 mb-3 sm:space-y-1.5 sm:mb-4">
             {technicalSpecs.slice(0, 3).map(([key, value]) => (

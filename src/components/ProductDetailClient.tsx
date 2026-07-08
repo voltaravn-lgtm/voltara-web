@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Phone, PlayCircle, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Gift, Phone, PlayCircle, ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import QuoteRequestModal from "./QuoteRequestModal";
 import OrderRequestModal from "./OrderRequestModal";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
 import { cleanVideoUrls, getProductVideoEmbed } from "../lib/video";
-import { Product, ProductVariant } from "../types";
+import { Product, ProductCombo, ProductVariant } from "../types";
 import ProductPromoImage from "./ProductPromoImage";
 
 interface ProductDetailClientProps {
@@ -16,7 +16,7 @@ interface ProductDetailClientProps {
 }
 
 export default function ProductDetailClient({ product, relatedProducts }: ProductDetailClientProps) {
-  const { products, addToCart } = useApp();
+  const { products, salesPrograms, addToCart } = useApp();
   const currentProduct = products.find((item) => item.id === product.id) || product;
   const productSource = (products.length > 0 ? products : [product, ...relatedProducts]).filter(item => !item.hidden);
   const sameCategoryProducts = productSource.filter(
@@ -32,18 +32,51 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
     () => (currentProduct.variants || []).filter((variant) => String(variant.name || "").trim()),
     [currentProduct.variants],
   );
+  const productCombos = useMemo(
+    () => [
+      ...(currentProduct.combos || []),
+      ...salesPrograms
+        .filter((program) => {
+          if (program.type !== "combo") return false;
+          return program.primaryProductId === currentProduct.id || (program.items || []).some((item) => item.productId === currentProduct.id);
+        })
+        .map((program) => ({
+          id: program.id,
+          name: program.name,
+          items: program.items,
+          originalPrice: program.originalPrice,
+          comboPrice: program.promoPrice,
+          description: program.description,
+          sku: program.sku,
+          image: program.image,
+          startsAt: program.startsAt,
+          endsAt: program.endsAt,
+          hidden: program.hidden,
+        } as ProductCombo)),
+    ].filter((combo) => {
+      if (!String(combo.name || "").trim() || combo.hidden) return false;
+      const now = Date.now();
+      const startsAt = combo.startsAt ? new Date(combo.startsAt).getTime() : 0;
+      const endsAt = combo.endsAt ? new Date(combo.endsAt).getTime() : 0;
+      return (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+    }),
+    [currentProduct.combos, currentProduct.id, salesPrograms],
+  );
   const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [selectedComboId, setSelectedComboId] = useState("");
   const selectedVariant = productVariants.find((variant) => variant.id === selectedVariantId) || productVariants[0] || null;
+  const selectedCombo = selectedComboId ? productCombos.find((combo) => combo.id === selectedComboId) || null : null;
 
   const gallery = useMemo(() => {
     const images = [
       selectedVariant?.image,
+      selectedCombo?.image,
       currentProduct.image,
       ...(currentProduct.images || []),
       ...productVariants.map((variant) => variant.image),
     ];
     return Array.from(new Set(images.filter((image): image is string => Boolean(image))));
-  }, [currentProduct.image, currentProduct.images, productVariants, selectedVariant?.image]);
+  }, [currentProduct.image, currentProduct.images, productVariants, selectedCombo?.image, selectedVariant?.image]);
 
   const [activeImage, setActiveImage] = useState(gallery[0] || currentProduct.image);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
@@ -76,7 +109,13 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
   );
   const regularPrice = formatDisplayPrice(selectedVariant?.price || currentProduct.price);
   const salePrice = formatDisplayPrice(selectedVariant?.salePrice || currentProduct.salePrice);
-  const hasVisiblePrice = Boolean(regularPrice || salePrice);
+  const comboOriginalPrice = formatDisplayPrice(selectedCombo?.originalPrice);
+  const comboPrice = formatDisplayPrice(selectedCombo?.comboPrice);
+  const displayRegularPrice = selectedCombo ? comboOriginalPrice || regularPrice : regularPrice;
+  const displaySalePrice = selectedCombo ? comboPrice : salePrice;
+  const hasDisplayDiscount = Boolean(displaySalePrice && isLowerPrice(displaySalePrice, displayRegularPrice));
+  const displayFinalPrice = displaySalePrice || displayRegularPrice;
+  const hasVisiblePrice = Boolean(displayFinalPrice);
   const activeImageIndex = Math.max(0, gallery.findIndex((image) => image === activeImage));
   const goToPreviousImage = () => {
     if (gallery.length <= 1) return;
@@ -107,9 +146,29 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
     setSelectedVariantId(productVariants[0]?.id || "");
   }, [currentProduct.id, productVariants]);
 
+  useEffect(() => {
+    setSelectedComboId("");
+  }, [currentProduct.id]);
+
   const handleSelectVariant = (variant: ProductVariant) => {
     setSelectedVariantId(variant.id);
     if (variant.image) setActiveImage(variant.image);
+  };
+
+  const handleSelectCombo = (combo: ProductCombo) => {
+    setSelectedComboId(combo.id);
+    if (combo.image) setActiveImage(combo.image);
+  };
+  const getComboSummary = (combo: ProductCombo | null) => {
+    if (!combo) return "";
+    if (combo.description) return combo.description;
+    return (combo.items || [])
+      .map((item) => {
+        const itemProduct = products.find((productItem) => productItem.id === item.productId);
+        return itemProduct ? `${itemProduct.name}${item.quantity && item.quantity > 1 ? ` x${item.quantity}` : ""}` : "";
+      })
+      .filter(Boolean)
+      .join(" + ");
   };
 
   return (
@@ -213,20 +272,20 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
 
               {hasVisiblePrice && (
                 <div className="mt-5 inline-flex flex-wrap items-end gap-3 border border-gold-dark/25 bg-gold-dark/5 px-4 py-3">
-                  {salePrice ? (
+                  {hasDisplayDiscount ? (
                     <>
                       <div>
                         <div className="text-[9px] font-display font-bold uppercase tracking-widest text-gray-500">Giá giảm</div>
-                        <div className="text-2xl font-display font-black text-gold-light">{salePrice}</div>
+                        <div className="text-2xl font-display font-black text-gold-light">{displaySalePrice}</div>
                       </div>
-                      {regularPrice && (
-                        <div className="pb-1 text-sm font-semibold text-gray-500 line-through">{regularPrice}</div>
+                      {displayRegularPrice && (
+                        <div className="pb-1 text-sm font-semibold text-gray-500 line-through">{displayRegularPrice}</div>
                       )}
                     </>
                   ) : (
                     <div>
                       <div className="text-[9px] font-display font-bold uppercase tracking-widest text-gray-500">Giá bán</div>
-                      <div className="text-2xl font-display font-black text-gold-light">{regularPrice}</div>
+                      <div className="text-2xl font-display font-black text-gold-light">{displayFinalPrice}</div>
                     </div>
                   )}
                 </div>
@@ -234,7 +293,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
 
               {productVariants.length > 0 && (
                 <div className="mt-6">
-                  <div className="mb-2 text-[10px] font-display font-bold uppercase tracking-widest text-gray-500">Chon phan loai</div>
+                  <div className="mb-2 text-[10px] font-display font-bold uppercase tracking-widest text-gray-500">Chọn phân loại</div>
                   <div className="flex flex-wrap gap-2">
                     {productVariants.map((variant) => {
                       const isActive = selectedVariant?.id === variant.id;
@@ -262,6 +321,69 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 </div>
               )}
 
+              {productCombos.length > 0 && (
+                <div className="mt-6 border border-gold-dark/35 bg-gold-dark/5 p-4 shadow-[0_0_24px_rgba(216,154,43,0.08)]">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="inline-flex items-center gap-2 bg-gold-dark px-3 py-1 text-[10px] font-display font-black uppercase tracking-widest text-black">
+                        <Gift className="h-3.5 w-3.5" />
+                        Combo khuyến mãi
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-gray-400">Có thể mua lẻ sản phẩm hoặc chọn gói combo ưu đãi bên dưới.</p>
+                    </div>
+                    <span className="text-[10px] font-display font-bold uppercase tracking-widest text-gold-light">
+                      {productCombos.length} ưu đãi
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedComboId("");
+                        setActiveImage(selectedVariant?.image || currentProduct.image);
+                      }}
+                      className={`border p-3 text-left transition-colors ${
+                        !selectedCombo ? "border-gold-light bg-gold-dark/10 text-white" : "border-white/10 bg-[#101010] text-gray-300 hover:border-gold-dark/60"
+                      }`}
+                    >
+                      <span className="block text-[11px] font-display font-black uppercase tracking-wider">Mua lẻ sản phẩm</span>
+                      <span className="mt-1 block text-[10px] leading-relaxed text-gray-400">Không áp dụng combo, mua riêng sản phẩm hiện tại.</span>
+                      {(regularPrice || salePrice) && (
+                        <span className="mt-2 flex flex-wrap items-end gap-2">
+                          {(salePrice || regularPrice) && <span className="text-sm font-display font-black text-gold-light">{salePrice || regularPrice}</span>}
+                          {salePrice && isLowerPrice(salePrice, regularPrice) && regularPrice && <span className="text-[11px] font-semibold text-gray-500 line-through">{regularPrice}</span>}
+                        </span>
+                      )}
+                    </button>
+                    {productCombos.map((combo) => {
+                      const isActive = selectedCombo?.id === combo.id;
+                      const comboOriginal = formatDisplayPrice(combo.originalPrice);
+                      const comboSale = formatDisplayPrice(combo.comboPrice);
+                      const hasComboDiscount = Boolean(comboSale && isLowerPrice(comboSale, comboOriginal));
+                      return (
+                        <button
+                          key={combo.id}
+                          type="button"
+                          onClick={() => handleSelectCombo(combo)}
+                          className={`border p-3 text-left transition-colors ${
+                            isActive ? "border-gold-light bg-gold-dark/10 text-white" : "border-white/10 bg-[#101010] text-gray-300 hover:border-gold-dark/60"
+                          }`}
+                        >
+                          <span className="block text-[11px] font-display font-black uppercase tracking-wider">{combo.name}</span>
+                          {getComboSummary(combo) && <span className="mt-1 block text-[10px] leading-relaxed text-gray-400">{getComboSummary(combo)}</span>}
+                          {(comboOriginal || comboSale) && (
+                            <span className="mt-2 flex flex-wrap items-end gap-2">
+                              {(comboSale || comboOriginal) && <span className="text-sm font-display font-black text-gold-light">{comboSale || comboOriginal}</span>}
+                              {hasComboDiscount && comboOriginal && <span className="text-[11px] font-semibold text-gray-500 line-through">{comboOriginal}</span>}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {summarySpecs.length > 0 && (
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {summarySpecs.map(([label, value]) => (
@@ -277,7 +399,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                 {hasVisiblePrice && (
                   <button
                     type="button"
-                    onClick={() => addToCart(currentProduct, 1, selectedVariant)}
+                    onClick={() => addToCart(currentProduct, 1, selectedVariant, selectedCombo)}
                     className="inline-flex h-12 items-center justify-center gap-2 border border-gold-dark/40 px-6 text-[11px] font-display font-black uppercase tracking-widest text-gold-light transition-colors hover:border-gold-light hover:text-white"
                   >
                     <ShoppingCart className="h-4 w-4" />
@@ -327,7 +449,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
               <div className="mb-6 flex items-center gap-2">
                 <PlayCircle className="h-5 w-5 text-gold-light" />
                 <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">
-                  Video san pham
+                  Video sản phẩm
                 </h2>
               </div>
 
@@ -348,7 +470,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                       <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-[#050505] p-6 text-center">
                         <PlayCircle className="h-10 w-10 text-gold-light" />
                         <p className="max-w-sm text-xs leading-relaxed text-gray-400">
-                          Video nay can mo tren trang nguon.
+                          Video này cần mở trên trang nguồn.
                         </p>
                         <a
                           href={video.originalUrl}
@@ -356,7 +478,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 border border-gold-dark/40 px-4 py-2 text-[10px] font-display font-bold uppercase tracking-widest text-gold-light hover:border-gold-light hover:text-white"
                         >
-                          Mo video
+                          Mở video
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       </div>
@@ -494,8 +616,11 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
         onClose={() => setIsOrderModalOpen(false)}
         productName={currentProduct.name}
         variantName={selectedVariant?.name}
-        productPrice={salePrice || regularPrice}
-        productSku={selectedVariant?.sku || currentProduct.sku}
+        comboName={selectedCombo?.name}
+        comboDescription={getComboSummary(selectedCombo)}
+        comboOriginalPrice={selectedCombo ? displayRegularPrice : ""}
+        productPrice={displayFinalPrice}
+        productSku={selectedCombo?.sku || selectedVariant?.sku || currentProduct.sku}
         productId={currentProduct.id}
       />
     </div>
@@ -557,6 +682,17 @@ function formatDisplayPrice(price: string | undefined): string {
   }
 
   return raw;
+}
+
+function parsePriceNumber(price: string | undefined): number {
+  const digits = String(price || "").replace(/[^\d]/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+function isLowerPrice(price: string | undefined, originalPrice: string | undefined): boolean {
+  const priceValue = parsePriceNumber(price);
+  const originalValue = parsePriceNumber(originalPrice);
+  return Boolean(priceValue && originalValue && priceValue < originalValue);
 }
 
 function getShortDescription(desc: string | undefined): string {

@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
-import { Product, ProductVariant, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
+import { Product, ProductVariant, ProductCombo, SalesProgram, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
 import { getProductSlug } from "../lib/productRoutes";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
 import { auth, db, isFirebaseConfigured } from "../lib/firebase";
@@ -147,7 +147,6 @@ interface AppContextType {
   setAcademyCourses: React.Dispatch<React.SetStateAction<Course[]>>;
   
   // Dynamic State Modifiers for Easy Administration
-  resetToDefault: () => void;
   updateProduct: (product: Product) => void;
   addProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
@@ -206,13 +205,17 @@ interface AppContextType {
   updateContactSettings: (settings: SiteContactSettings) => Promise<void>;
   promoOverlaySettings: PromoOverlaySettings;
   updatePromoOverlaySettings: (settings: PromoOverlaySettings) => Promise<void>;
+  salesPrograms: SalesProgram[];
+  addSalesProgram: (program: SalesProgram) => void;
+  updateSalesProgram: (program: SalesProgram) => void;
+  deleteSalesProgram: (id: string) => void;
   cartItems: CartItem[];
   isCartOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
-  addToCart: (product: Product, quantity?: number, variant?: ProductVariant | null) => void;
-  updateCartQuantity: (productId: string, quantity: number, variantId?: string) => void;
-  removeFromCart: (productId: string, variantId?: string) => void;
+  addToCart: (product: Product, quantity?: number, variant?: ProductVariant | null, combo?: ProductCombo | null) => void;
+  updateCartQuantity: (productId: string, quantity: number, variantId?: string, comboId?: string) => void;
+  removeFromCart: (productId: string, variantId?: string, comboId?: string) => void;
   clearCart: () => void;
   cartCount: number;
 
@@ -580,6 +583,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem("voltara_promo_overlay_settings");
     return saved ? { ...defaultPromoOverlaySettings, ...JSON.parse(saved) } : defaultPromoOverlaySettings;
   });
+  const [salesPrograms, setSalesPrograms] = useState<SalesProgram[]>(() => {
+    const saved = localStorage.getItem("voltara_sales_programs");
+    return saved ? JSON.parse(saved) : [];
+  });
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem("voltara_cart_items");
     return saved ? JSON.parse(saved) : [];
@@ -934,33 +941,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [promoOverlaySettings]);
 
   useEffect(() => {
+    localStorage.setItem("voltara_sales_programs", JSON.stringify(salesPrograms));
+  }, [salesPrograms]);
+
+  useEffect(() => {
     localStorage.setItem("voltara_cart_items", JSON.stringify(cartItems));
   }, [cartItems]);
-
-  // Administration Helpers
-  const resetToDefault = () => {
-    if (window.confirm("Bạn có chắc chắn muốn khôi phục toàn bộ cài đặt về mặc định của Voltara?")) {
-      setMenuItems(defaultMenuItems);
-      setProductCategories(defaultProductCategories);
-      setProducts(PRODUCTS_DATA);
-      setSolutions(SOLUTIONS_DATA);
-      setArticles(ARTICLES_DATA);
-      setBranches(BRANCHES_DATA);
-      setDealers(DEALERS_DATA);
-      setJobs(JOBS_DATA);
-      setContactSubmissions([]);
-      setWarranties(defaultWarranties);
-      setAcademyCourses(sortCoursesNewestFirst(COURSES_DATA));
-      setQuoteRequests(defaultQuoteRequests);
-      setHeroSettings(defaultHeroSettings);
-      setHomeContent(defaultHomeContent);
-      setAboutContent(defaultAboutContent);
-      setContactSettings(defaultContactSettings);
-      setPromoOverlaySettings(defaultPromoOverlaySettings);
-      localStorage.clear();
-      showToast("Đã khôi phục thành công dữ liệu hệ thống!", "success");
-    }
-  };
 
   const updateProduct = async (updatedProduct: Product) => {
     const nextProduct = {
@@ -1302,17 +1288,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addSalesProgram = (program: SalesProgram) => {
+    setSalesPrograms(prev => [
+      ...prev,
+      {
+        ...program,
+        createdAt: program.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+  };
+
+  const updateSalesProgram = (program: SalesProgram) => {
+    setSalesPrograms(prev => prev.map((item) =>
+      item.id === program.id ? { ...program, updatedAt: new Date().toISOString() } : item
+    ));
+  };
+
+  const deleteSalesProgram = (id: string) => {
+    setSalesPrograms(prev => prev.filter((program) => program.id !== id));
+  };
+
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
 
-  const addToCart = (product: Product, quantity = 1, variant?: ProductVariant | null) => {
+  const addToCart = (product: Product, quantity = 1, variant?: ProductVariant | null, combo?: ProductCombo | null) => {
     const safeQuantity = Math.max(1, Math.floor(quantity || 1));
     const variantId = variant?.id || "";
+    const comboId = combo?.id || "";
     setCartItems(prev => {
-      const existing = prev.find(item => item.productId === product.id && (item.variantId || "") === variantId);
+      const existing = prev.find(item =>
+        item.productId === product.id &&
+        (item.variantId || "") === variantId &&
+        (item.comboId || "") === comboId
+      );
       if (existing) {
         return prev.map(item =>
-          item.productId === product.id && (item.variantId || "") === variantId
+          item.productId === product.id && (item.variantId || "") === variantId && (item.comboId || "") === comboId
             ? { ...item, quantity: item.quantity + safeQuantity }
             : item
         );
@@ -1328,25 +1340,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           variantSalePrice: variant?.salePrice,
           variantSku: variant?.sku,
           variantImage: variant?.image,
+          comboId: combo?.id,
+          comboName: combo?.name,
+          comboOriginalPrice: combo?.originalPrice,
+          comboPrice: combo?.comboPrice,
+          comboSku: combo?.sku,
+          comboImage: combo?.image,
           quantity: safeQuantity,
           addedAt: new Date().toISOString(),
         },
       ];
     });
-    showToast(`Đã thêm "${product.name}" vào giỏ hàng.`, "success");
+    showToast(`Đã thêm "${combo?.name || product.name}" vào giỏ hàng.`, "success");
   };
 
-  const updateCartQuantity = (productId: string, quantity: number, variantId = "") => {
+  const updateCartQuantity = (productId: string, quantity: number, variantId = "", comboId = "") => {
     const safeQuantity = Math.max(0, Math.floor(quantity || 0));
     setCartItems(prev =>
       safeQuantity <= 0
-        ? prev.filter(item => !(item.productId === productId && (item.variantId || "") === variantId))
-        : prev.map(item => item.productId === productId && (item.variantId || "") === variantId ? { ...item, quantity: safeQuantity } : item)
+        ? prev.filter(item => !(item.productId === productId && (item.variantId || "") === variantId && (item.comboId || "") === comboId))
+        : prev.map(item => item.productId === productId && (item.variantId || "") === variantId && (item.comboId || "") === comboId ? { ...item, quantity: safeQuantity } : item)
     );
   };
 
-  const removeFromCart = (productId: string, variantId = "") => {
-    setCartItems(prev => prev.filter(item => !(item.productId === productId && (item.variantId || "") === variantId)));
+  const removeFromCart = (productId: string, variantId = "", comboId = "") => {
+    setCartItems(prev => prev.filter(item => !(item.productId === productId && (item.variantId || "") === variantId && (item.comboId || "") === comboId)));
   };
 
   const clearCart = () => {
@@ -1395,6 +1413,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateContactSettings,
         promoOverlaySettings,
         updatePromoOverlaySettings,
+        salesPrograms,
+        addSalesProgram,
+        updateSalesProgram,
+        deleteSalesProgram,
         cartItems,
         isCartOpen,
         openCart,
@@ -1404,7 +1426,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeFromCart,
         clearCart,
         cartCount,
-        resetToDefault,
         updateProduct,
         addProduct,
         deleteProduct,

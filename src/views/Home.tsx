@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Zap, Award, Globe, Shield, ShieldCheck, ChevronRight, ChevronLeft, CheckCircle2, ChevronDown, MapPin, Truck, HelpCircle, Phone, ArrowUpRight } from "lucide-react";
+import { Zap, Award, Globe, Shield, ShieldCheck, ChevronRight, ChevronLeft, CheckCircle2, ChevronDown, MapPin, Truck, HelpCircle, Phone, ArrowUpRight, Gift, Clock } from "lucide-react";
 import { SectionTitle, StatCard, ProductCard } from "../components/Cards";
 import { useApp } from "../context/AppContext";
 import { AnimatePresence, motion } from "motion/react";
+import { getProductHref } from "../lib/productRoutes";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { products, heroSettings, homeContent, warranties } = useApp();
+  const { products, salesPrograms, heroSettings, homeContent, warranties } = useApp();
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [warrantySerial, setWarrantySerial] = useState("");
   const [warrantyResult, setWarrantyResult] = useState<any>(null);
@@ -89,6 +90,17 @@ export default function Home() {
   const filteredProducts = selectedCategory === "all"
     ? visibleProducts.slice(0, 4)
     : visibleProducts.filter(p => p.category === selectedCategory).slice(0, 4);
+  const activeComboPrograms = useMemo(() => {
+    const now = Date.now();
+    return salesPrograms
+      .filter((program) => {
+        if (program.type !== "combo" || program.hidden || !(program.items || []).length) return false;
+        const startsAt = program.startsAt ? new Date(program.startsAt).getTime() : 0;
+        const endsAt = program.endsAt ? new Date(program.endsAt).getTime() : 0;
+        return (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+      })
+      .slice(0, 3);
+  }, [salesPrograms]);
 
   const handleQuickWarrantCheck = (e: React.FormEvent) => {
     e.preventDefault();
@@ -363,6 +375,69 @@ export default function Home() {
         </div>
       </section>
 
+      {activeComboPrograms.length > 0 && (
+        <section className="py-20 bg-[#0A0A0A] border-y border-[#D89A2B]/20" id="home-combo-promotions-section">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <SectionTitle
+              subtitle="ƯU ĐÃI ĐANG CHẠY"
+              title="Combo Khuyến Mãi"
+              description="Các gói mua kèm được Voltara cấu hình sẵn, hiển thị giá gốc và giá ưu đãi rõ ràng."
+            />
+
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              {activeComboPrograms.map((program) => {
+                const firstProduct = products.find((product) => product.id === (program.primaryProductId || program.items?.[0]?.productId));
+                const image = program.image || firstProduct?.image || "/images/voltara_banner.webp";
+                const originalPrice = formatHomePrice(program.originalPrice);
+                const promoPrice = formatHomePrice(program.promoPrice);
+                const itemSummary = (program.items || [])
+                  .map((item) => {
+                    const product = products.find((entry) => entry.id === item.productId);
+                    return product ? `${product.name}${item.quantity && item.quantity > 1 ? ` x${item.quantity}` : ""}` : "";
+                  })
+                  .filter(Boolean)
+                  .join(" + ");
+                const href = firstProduct ? getProductHref(firstProduct) : "/san-pham";
+
+                return (
+                  <Link
+                    key={program.id}
+                    to={href}
+                    className="group overflow-hidden border border-gold-dark/25 bg-[#101010] transition-all hover:border-gold-light hover:shadow-[0_0_30px_rgba(216,154,43,0.14)]"
+                  >
+                    <div className="relative aspect-[16/10] bg-black">
+                      <img src={image} alt={program.name} className="h-full w-full object-contain p-4 transition-transform duration-500 group-hover:scale-105" referrerPolicy="no-referrer" />
+                      <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 bg-gold-dark px-3 py-1 text-[9px] font-display font-black uppercase tracking-widest text-black">
+                        <Gift className="h-3.5 w-3.5" />
+                        Combo
+                      </div>
+                    </div>
+                    <div className="space-y-3 border-t border-gold-dark/20 p-4">
+                      <h3 className="line-clamp-2 font-display text-sm font-black uppercase leading-relaxed text-white group-hover:text-gold-light">
+                        {program.name}
+                      </h3>
+                      {(program.description || itemSummary) && (
+                        <p className="line-clamp-2 text-[11px] leading-relaxed text-gray-400">{program.description || itemSummary}</p>
+                      )}
+                      <div className="flex flex-wrap items-end gap-2">
+                        {promoPrice && <span className="font-display text-xl font-black text-gold-light">{promoPrice}</span>}
+                        {originalPrice && <span className="pb-0.5 text-xs font-semibold text-gray-500 line-through">{originalPrice}</span>}
+                      </div>
+                      {program.endsAt && (
+                        <div className="flex items-center gap-1.5 text-[10px] font-display font-bold uppercase tracking-widest text-gray-500">
+                          <Clock className="h-3.5 w-3.5 text-gold-light" />
+                          Kết thúc: {formatHomeDate(program.endsAt)}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 4. STATISTICS COUNTER SECTION */}
       <section className="py-20 bg-[#0A0A0A] border-y border-white/5 relative overflow-hidden" id="stats-numbers-section">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-7xl h-[1px] bg-gradient-to-r from-transparent via-[#D89A2B]/10 to-transparent" />
@@ -593,4 +668,26 @@ export default function Home() {
       
     </div>
   );
+}
+
+function formatHomePrice(price: string | undefined) {
+  const raw = String(price || "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/[^\d]/g, "");
+  if (digits && digits.length === raw.replace(/\s/g, "").length) {
+    return `${Number(digits).toLocaleString("vi-VN")}đ`;
+  }
+  return raw;
+}
+
+function formatHomeDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
