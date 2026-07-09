@@ -28,6 +28,7 @@ import {
   BookOpen,
   Building,
   ShieldCheck,
+  QrCode,
   Calculator,
   MapPin,
   Gift
@@ -480,6 +481,17 @@ export default function Admin() {
               </span>
               <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "warranties" ? "rotate-90 text-gold-light" : ""}`} />
             </button>
+
+            <a
+              href="/admin/warranty-qr"
+              className="w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"
+            >
+              <span className="flex items-center gap-3">
+                <QrCode className="w-4 h-4" />
+                Tem QR bảo hành
+              </span>
+              <ChevronRight className="w-4 h-4" />
+            </a>
 
             <button
   onClick={() => setActiveTab("webp")}

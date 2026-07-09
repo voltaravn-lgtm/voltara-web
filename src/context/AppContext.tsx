@@ -170,6 +170,7 @@ interface AppContextType {
 
   // Warranty Modifiers
   addWarranty: (w: WarrantyRecord) => void;
+  addWarrantiesBulk: (items: WarrantyRecord[]) => Promise<void>;
   updateWarranty: (w: WarrantyRecord) => void;
   deleteWarranty: (id: string) => void;
 
@@ -707,20 +708,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
-    const unsubscribeWarranties = onSnapshot(
-      collection(db, "warranties"),
-      (snapshot) => {
-        if (snapshot.empty) {
-          setWarranties([]);
-          return;
-        }
-        setWarranties(sortWarrantiesNewestFirst(snapshot.docs.map((item) => item.data() as WarrantyRecord)));
-      },
-      (error) => {
-        console.error("Could not load warranties from Firestore:", error);
-      }
-    );
-
     const unsubscribeAcademyCourses = onSnapshot(
       collection(db, "academyCourses"),
       (snapshot) => {
@@ -740,7 +727,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribeMenuSettings();
       unsubscribeProductCategories();
       unsubscribeProducts();
-      unsubscribeWarranties();
       unsubscribeAcademyCourses();
     };
   }, []);
@@ -1099,6 +1085,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
   };
+
+  const addWarrantiesBulk = async (items: WarrantyRecord[]) => {
+    if (!items.length) return;
+
+    const now = new Date().toISOString();
+    const nextItems = items.map((item) => ({
+      ...item,
+      createdAt: item.createdAt || now,
+      updatedAt: now,
+    }));
+
+    setWarranties(prev => sortWarrantiesNewestFirst([...nextItems, ...prev]));
+
+    if (isFirebaseConfigured) {
+      try {
+        for (let index = 0; index < nextItems.length; index += 450) {
+          const batch = writeBatch(db);
+          nextItems.slice(index, index + 450).forEach((item) => {
+            batch.set(doc(db, "warranties", item.id), item, { merge: false });
+          });
+          await batch.commit();
+        }
+      } catch (error) {
+        console.error("Could not save warranty serials to Firestore:", error);
+        showToast("Không lưu được danh sách serial lên Firebase.", "error");
+        throw error;
+      }
+    }
+  };
+
   const updateWarranty = (w: WarrantyRecord) => {
     const nextWarranty = {
       ...w,
@@ -1441,6 +1457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addSubmission,
         deleteSubmission,
         addWarranty,
+        addWarrantiesBulk,
         updateWarranty,
         deleteWarranty,
         addAcademyCourse,

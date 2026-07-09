@@ -1,18 +1,31 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ClipboardCheck, Loader2, ShieldCheck } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { WarrantyRecord } from "../types";
 import { getMenuBanner } from "../lib/menuBanners";
+import { isMachineWarrantyStatus, warrantyIdFromSerial } from "../lib/warrantyQr";
+import { doc, getDoc } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../lib/firebase";
 
 const inputClass = "w-full bg-black border border-white/10 px-3.5 py-3 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-gold-light";
-
-function warrantyIdFromSerial(serial: string) {
-  return `warranty-${serial.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}`;
-}
+const lockedInputClass = `${inputClass} cursor-not-allowed border-gold-dark/25 bg-gold-dark/5 text-gray-300`;
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("vi-VN");
+}
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateInputToVi(dateText: string) {
+  const parts = dateText.split("-");
+  if (parts.length !== 3) return dateText;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 function addMonths(dateText: string, months: number) {
@@ -23,36 +36,139 @@ function addMonths(dateText: string, months: number) {
   return formatDate(date);
 }
 
+function getProductCodeFromSerial(serial: string) {
+  const parts = serial.trim().toUpperCase().split("-").filter(Boolean);
+  if (parts.length < 3) return "";
+  return parts.slice(0, -2).join("-");
+}
+
 export default function WarrantyActivation() {
-  const { warranties, addWarranty, showToast, menuItems } = useApp();
+  const { warranties, addWarranty, updateWarranty, showToast, menuItems } = useApp();
   const bannerImage = getMenuBanner(menuItems, "/bao-hanh", "/images/bao-hanh.webp");
   const [loading, setLoading] = useState(false);
+  const [checkingSerial, setCheckingSerial] = useState(false);
   const [successSerial, setSuccessSerial] = useState("");
+  const [serialFromQr, setSerialFromQr] = useState(false);
+  const [remoteWarranty, setRemoteWarranty] = useState<WarrantyRecord | null>(null);
   const [form, setForm] = useState({
     serial: "",
+    productCode: "",
     productName: "",
     customerName: "",
     customerPhone: "",
     customerEmail: "",
     dealerName: "",
-    purchaseDate: formatDate(new Date()),
+    purchaseDate: formatDateInput(new Date()),
     termMonths: 12,
   });
+
+  const normalizedSerial = form.serial.trim().toUpperCase();
+  const existingWarranty = useMemo(() => {
+    if (remoteWarranty) return remoteWarranty;
+    if (!normalizedSerial) return null;
+    return warranties.find(item => item.serial.trim().toUpperCase() === normalizedSerial) || null;
+  }, [normalizedSerial, remoteWarranty, warranties]);
+  const lockQrFields = serialFromQr && Boolean(form.serial);
+  const lockIdentityFields = !serialFromQr || lockQrFields;
+  const warrantyStatus = existingWarranty?.status || "";
+  const warrantyStatusMessage = warrantyStatus === "activated"
+    ? "Sản phẩm này đã được kích hoạt bảo hành. Vui lòng tra cứu bảo hành hoặc liên hệ Voltara để được hỗ trợ."
+    : warrantyStatus === "pending"
+      ? "Serial này đã gửi yêu cầu kích hoạt và đang chờ Voltara duyệt."
+      : warrantyStatus === "rejected"
+        ? "Serial này đã bị từ chối kích hoạt. Vui lòng liên hệ Voltara để được hỗ trợ."
+        : "";
+  const blockSubmit = checkingSerial || !serialFromQr || Boolean(warrantyStatusMessage) || !existingWarranty;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const serial = params.get("serial");
+    const productCode = params.get("productCode");
+    const productName = params.get("productName");
+    if (!serial) return;
+    const nextSerial = serial.trim().toUpperCase();
+    setSerialFromQr(true);
+    setForm(prev => ({
+      ...prev,
+      serial: nextSerial,
+      productCode: productCode?.trim().toUpperCase() || prev.productCode || getProductCodeFromSerial(nextSerial),
+      productName: productName?.trim() || prev.productName,
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!serialFromQr || !normalizedSerial || !isFirebaseConfigured) return;
+
+    setCheckingSerial(true);
+    getDoc(doc(db, "warranties", warrantyIdFromSerial(normalizedSerial)))
+      .then((snapshot) => {
+        setRemoteWarranty(snapshot.exists() ? snapshot.data() as WarrantyRecord : null);
+      })
+      .catch((error) => {
+        console.error("Could not check warranty serial:", error);
+        showToast("Không kiểm tra được serial bảo hành. Vui lòng thử lại sau.", "error");
+      })
+      .finally(() => setCheckingSerial(false));
+  }, [normalizedSerial, serialFromQr, showToast]);
+
+  useEffect(() => {
+    if (!existingWarranty) return;
+    setForm(prev => ({
+      ...prev,
+      productCode: prev.productCode || existingWarranty.productCode || getProductCodeFromSerial(existingWarranty.serial),
+      productName: prev.productName || existingWarranty.productName || "",
+      termMonths: Number(existingWarranty.warrantyMonths || existingWarranty.termMonths || prev.termMonths),
+    }));
+  }, [existingWarranty]);
 
   const updateField = (field: keyof typeof form, value: string | number) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  const updateSerial = (value: string) => {
+    const nextSerial = value.toUpperCase();
+    setForm(prev => ({
+      ...prev,
+      serial: nextSerial,
+      productCode: !prev.productCode || prev.productCode === getProductCodeFromSerial(prev.serial)
+        ? getProductCodeFromSerial(nextSerial)
+        : prev.productCode,
+    }));
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    const normalizedSerial = form.serial.trim().toUpperCase();
     if (!normalizedSerial || !form.productName.trim() || !form.customerName.trim() || !form.customerPhone.trim()) {
       showToast("Vui lòng nhập đủ Serial, sản phẩm, họ tên và số điện thoại.", "warning");
       return;
     }
 
-    const exists = warranties.some(item => item.serial.trim().toUpperCase() === normalizedSerial);
-    if (exists) {
+    if (!serialFromQr) {
+      showToast("Vui lòng quét mã QR trên tem bảo hành để kích hoạt sản phẩm.", "warning");
+      return;
+    }
+
+    if (!existingWarranty) {
+      showToast("Serial QR này chưa được Voltara phát hành hoặc chưa có trong hệ thống. Vui lòng liên hệ Voltara để được hỗ trợ.", "error");
+      return;
+    }
+
+    if (existingWarranty?.status === "activated") {
+      showToast(warrantyStatusMessage, "warning");
+      return;
+    }
+
+    if (existingWarranty?.status === "pending") {
+      showToast(warrantyStatusMessage, "warning");
+      return;
+    }
+
+    if (existingWarranty?.status === "rejected") {
+      showToast(warrantyStatusMessage, "warning");
+      return;
+    }
+
+    if (existingWarranty && !isMachineWarrantyStatus(existingWarranty.status)) {
       showToast("Serial này đã có hồ sơ bảo hành trên hệ thống.", "warning");
       return;
     }
@@ -60,23 +176,32 @@ export default function WarrantyActivation() {
     setLoading(true);
     const today = formatDate(new Date());
     const payload: WarrantyRecord = {
-      id: warrantyIdFromSerial(normalizedSerial),
+      ...(existingWarranty || {}),
+      id: existingWarranty?.id || warrantyIdFromSerial(normalizedSerial),
       serial: normalizedSerial,
+      productCode: form.productCode.trim().toUpperCase() || existingWarranty?.productCode || getProductCodeFromSerial(normalizedSerial),
       productName: form.productName.trim(),
       customerName: form.customerName.trim(),
       customerPhone: form.customerPhone.trim(),
       customerEmail: form.customerEmail.trim(),
       dealerName: form.dealerName.trim(),
-      purchaseDate: form.purchaseDate,
+      purchasePlace: form.dealerName.trim(),
+      purchaseDate: formatDateInputToVi(form.purchaseDate),
+      activatedAt: new Date().toISOString(),
       activatedDate: today,
       termMonths: Number(form.termMonths),
+      warrantyMonths: Number(form.termMonths),
       expiryDate: addMonths(today, Number(form.termMonths)) || "Chờ xác nhận",
-      status: "Chờ admin duyệt",
+      status: "pending",
       specNotes: "Khách tự kích hoạt bảo hành điện tử. Chờ quản trị viên đối chiếu thông tin mua hàng.",
       activationSource: "customer",
     };
 
-    addWarranty(payload);
+    if (existingWarranty) {
+      updateWarranty(payload);
+    } else {
+      addWarranty(payload);
+    }
     setSuccessSerial(normalizedSerial);
     setLoading(false);
     showToast("Đã gửi yêu cầu kích hoạt bảo hành. Admin sẽ kiểm tra và duyệt.", "success");
@@ -112,12 +237,24 @@ export default function WarrantyActivation() {
 
       <main className="mx-auto grid max-w-5xl grid-cols-1 gap-6 px-4 pt-10 sm:px-6 lg:grid-cols-12 lg:px-8">
         <form onSubmit={handleSubmit} className="space-y-5 border border-gold-dark/25 bg-[#0B0B0B] p-5 sm:p-6 lg:col-span-8">
+          <div className={`border p-3 text-xs leading-relaxed ${!serialFromQr || warrantyStatusMessage || !existingWarranty ? "border-red-500/25 bg-red-500/5 text-red-200" : "border-gold-dark/25 bg-gold-dark/5 text-gray-300"}`}>
+            {checkingSerial
+              ? "Đang kiểm tra serial QR trên hệ thống..."
+              : !serialFromQr
+              ? "Vui lòng quét mã QR trên tem bảo hành để kích hoạt. Hệ thống không nhận kích hoạt bằng cách nhập serial thủ công."
+              : warrantyStatusMessage || (!existingWarranty
+                ? "Serial QR này chưa được Voltara phát hành hoặc chưa có trong hệ thống. Vui lòng liên hệ Voltara để được hỗ trợ."
+                : "Thông tin tem QR đã được khóa theo serial phát hành. Quý khách chỉ cần nhập thông tin mua hàng để gửi kích hoạt.")}
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Serial / SN sản phẩm *">
-              <input value={form.serial} onChange={(e) => updateField("serial", e.target.value)} required className={`${inputClass} uppercase font-mono`} placeholder="VD: VOLTARA-48V-20AH-0001" />
+              <input value={form.serial} onChange={(e) => updateSerial(e.target.value)} readOnly={lockIdentityFields} required className={`${lockIdentityFields ? lockedInputClass : inputClass} uppercase font-mono`} placeholder="VD: VOLTARA-48V-20AH-0001" />
+            </Field>
+            <Field label="Mã sản phẩm">
+              <input value={form.productCode} onChange={(e) => updateField("productCode", e.target.value.toUpperCase())} readOnly={lockIdentityFields} className={`${lockIdentityFields ? lockedInputClass : inputClass} uppercase font-mono`} placeholder="VD: VT-IW300" />
             </Field>
             <Field label="Tên sản phẩm *">
-              <input value={form.productName} onChange={(e) => updateField("productName", e.target.value)} required className={inputClass} placeholder="VD: Bộ Pin Xe Điện Lithium 48V 20Ah" />
+              <input value={form.productName} onChange={(e) => updateField("productName", e.target.value)} readOnly={lockIdentityFields} required className={lockIdentityFields ? lockedInputClass : inputClass} placeholder="VD: Bộ Pin Xe Điện Lithium 48V 20Ah" />
             </Field>
             <Field label="Họ tên khách hàng *">
               <input value={form.customerName} onChange={(e) => updateField("customerName", e.target.value)} required className={inputClass} placeholder="Nguyễn Văn A" />
@@ -132,10 +269,11 @@ export default function WarrantyActivation() {
               <input value={form.dealerName} onChange={(e) => updateField("dealerName", e.target.value)} className={inputClass} placeholder="Tên đại lý hoặc sàn TMĐT" />
             </Field>
             <Field label="Ngày mua hàng">
-              <input value={form.purchaseDate} onChange={(e) => updateField("purchaseDate", e.target.value)} className={`${inputClass} font-mono`} placeholder="DD/MM/YYYY" />
+              <input type="date" value={form.purchaseDate} onChange={(e) => updateField("purchaseDate", e.target.value)} className={`${inputClass} font-mono`} />
             </Field>
             <Field label="Thời hạn bảo hành">
-              <select value={form.termMonths} onChange={(e) => updateField("termMonths", Number(e.target.value))} className={inputClass}>
+              <select value={form.termMonths} onChange={(e) => updateField("termMonths", Number(e.target.value))} disabled={lockIdentityFields} className={lockIdentityFields ? lockedInputClass : inputClass}>
+                <option value={6}>6 tháng</option>
                 <option value={12}>12 tháng</option>
                 <option value={18}>18 tháng</option>
                 <option value={24}>24 tháng</option>
@@ -144,8 +282,8 @@ export default function WarrantyActivation() {
             </Field>
           </div>
 
-          <button disabled={loading} type="submit" className="gold-gradient-bg inline-flex h-12 w-full items-center justify-center gap-2 text-[11px] font-display font-black uppercase tracking-widest text-black hover:opacity-90 disabled:opacity-60">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+          <button disabled={loading || blockSubmit} type="submit" className="gold-gradient-bg inline-flex h-12 w-full items-center justify-center gap-2 text-[11px] font-display font-black uppercase tracking-widest text-black hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+            {loading || checkingSerial ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
             Gửi kích hoạt bảo hành
           </button>
         </form>

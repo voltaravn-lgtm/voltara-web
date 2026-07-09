@@ -263,12 +263,18 @@ export interface ContactSubmission {
 export interface WarrantyRecord {
   id: string;
   serial: string;
+  productCode?: string;
   productName: string;
+  batchCode?: string;
+  warrantyMonths?: number;
+  qrUrl?: string;
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
   dealerName?: string;
+  purchasePlace?: string;
   purchaseDate?: string;
+  activatedAt?: string;
   activatedDate: string;
   termMonths: number;
   expiryDate: string;

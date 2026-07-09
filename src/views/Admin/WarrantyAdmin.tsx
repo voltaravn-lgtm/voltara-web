@@ -6,7 +6,9 @@
 import React, { useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { WarrantyRecord } from "../../types";
-import { Plus, Trash2, Edit, Save, X, Search, ShieldCheck, Heart, Settings, BatteryCharging } from "lucide-react";
+import { Plus, Trash2, Save, X, Search, ShieldCheck, Loader2 } from "lucide-react";
+import { collection, doc, getDoc, getDocs, limit, query, where } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../../lib/firebase";
 
 function warrantyIdFromSerial(serial: string) {
   return `warranty-${serial.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}`;
@@ -16,6 +18,9 @@ export default function WarrantyAdmin() {
   const { warranties, addWarranty, updateWarranty, deleteWarranty, showToast } = useApp();
 
   const [searchText, setSearchText] = useState("");
+  const [searchResults, setSearchResults] = useState<WarrantyRecord[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -125,11 +130,44 @@ export default function WarrantyAdmin() {
     }
   };
 
-  const filteredWarranties = warranties.filter(w => 
-    w.serial.toLowerCase().includes(searchText.toLowerCase()) ||
-    w.customerName.toLowerCase().includes(searchText.toLowerCase()) ||
-    w.productName.toLowerCase().includes(searchText.toLowerCase())
-  );
+  const handleSearch = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    const keyword = searchText.trim();
+    if (!keyword) {
+      showToast("Nhập serial hoặc số điện thoại để tìm hồ sơ.", "warning");
+      return;
+    }
+
+    setSearching(true);
+    setHasSearched(true);
+
+    try {
+      if (isFirebaseConfigured) {
+        const normalizedSerial = keyword.toUpperCase();
+        const byId = new Map<string, WarrantyRecord>();
+        const serialSnapshot = await getDoc(doc(db, "warranties", warrantyIdFromSerial(normalizedSerial)));
+        if (serialSnapshot.exists()) byId.set(serialSnapshot.id, serialSnapshot.data() as WarrantyRecord);
+
+        const phoneSnapshot = await getDocs(query(collection(db, "warranties"), where("customerPhone", "==", keyword), limit(20)));
+        phoneSnapshot.docs.forEach((item) => byId.set(item.id, item.data() as WarrantyRecord));
+
+        setSearchResults(Array.from(byId.values()));
+      } else {
+        const lowerKeyword = keyword.toLowerCase();
+        setSearchResults(warranties.filter(w =>
+          w.serial.toLowerCase().includes(lowerKeyword) ||
+          w.customerName.toLowerCase().includes(lowerKeyword) ||
+          w.customerPhone?.toLowerCase().includes(lowerKeyword) ||
+          w.productName.toLowerCase().includes(lowerKeyword)
+        ).slice(0, 20));
+      }
+    } catch (error) {
+      console.error("Could not search warranties:", error);
+      showToast("Không tìm được hồ sơ bảo hành. Vui lòng thử lại.", "error");
+    } finally {
+      setSearching(false);
+    }
+  };
 
   return (
     <div className="bg-[#0A0A0A] border border-white/5 p-6 text-left">
@@ -284,7 +322,7 @@ export default function WarrantyAdmin() {
       {/* Listing warranties table and filters */}
       <div className="space-y-4">
         {/* Search header bar info */}
-        <div className="relative">
+        <form onSubmit={handleSearch} className="relative flex gap-2">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-500">
             <Search className="w-4 h-4" />
           </span>
@@ -292,25 +330,37 @@ export default function WarrantyAdmin() {
             type="text"
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
-            placeholder="Tìm theo sê-ri mã, tên gia chủ sạc, tên sản phẩm Voltara..."
+            placeholder="Nhập chính xác serial hoặc số điện thoại để dò hồ sơ..."
             className="w-full bg-black border border-white/5 pl-9 pr-3 py-2.5 text-xs text-[#ECECEC] focus:outline-none focus:border-gold-dark font-sans"
           />
-        </div>
+          <button
+            type="submit"
+            disabled={searching}
+            className="shrink-0 inline-flex items-center justify-center gap-2 bg-gold-dark px-4 py-2.5 text-[10px] font-display font-black uppercase tracking-widest text-black disabled:opacity-60"
+          >
+            {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+            Tìm
+          </button>
+        </form>
 
         {/* Warranties grid split table lists */}
         <div className="border border-white/5 bg-black/45">
           <div className="bg-white/5 border-b border-white/5 p-3 flex justify-between text-[10px] font-mono text-gray-400 uppercase tracking-widest font-semibold">
-            <span>Danh mục sổ bảo hành của Voltara ({filteredWarranties.length} bản ghi)</span>
-            <span>Live Sync Database</span>
+            <span>Kết quả dò hồ sơ ({searchResults.length} bản ghi)</span>
+            <span>Search on demand</span>
           </div>
 
-          {filteredWarranties.length === 0 ? (
+          {!hasSearched ? (
+            <div className="p-10 text-center text-xs text-gray-500">
+              Nhập serial hoặc số điện thoại rồi bấm Tìm. Trang này không tự tải toàn bộ hồ sơ để tiết kiệm lượt đọc Firebase.
+            </div>
+          ) : searchResults.length === 0 ? (
             <div className="p-10 text-center text-xs text-gray-500">
               Không tìm thấy hồ sơ bảo hành nào phù hợp theo màng lưới số liệu.
             </div>
           ) : (
             <div className="divide-y divide-white/5 max-h-[460px] overflow-y-auto">
-              {filteredWarranties.map((w) => (
+              {searchResults.map((w) => (
                 <div key={w.id} className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-white/[0.015] transition-colors">
                   <div className="text-left space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
