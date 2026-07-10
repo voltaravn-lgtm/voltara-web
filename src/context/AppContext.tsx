@@ -4,8 +4,9 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
 import { Product, ProductVariant, ProductCombo, SalesProgram, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
 import { getProductSlug } from "../lib/productRoutes";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
@@ -112,6 +113,13 @@ function sortCoursesNewestFirst(items: Course[]) {
     if (aTime !== bTime) return bTime - aTime;
     return String(b.id).localeCompare(String(a.id), "vi");
   });
+}
+
+const PUBLIC_FIRESTORE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function shouldRefreshPublicFirestoreCache(key: string) {
+  const lastSync = Number(localStorage.getItem(key) || "0");
+  return !lastSync || Date.now() - lastSync > PUBLIC_FIRESTORE_CACHE_TTL_MS;
 }
 
 interface AppContextType {
@@ -464,6 +472,9 @@ const defaultQuoteRequests: QuoteRequest[] = [
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin") ?? false;
+
   // Load or Initialize Navigation Menus
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     const saved = localStorage.getItem("voltara_menu_items");
@@ -630,106 +641,174 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isFirebaseConfigured) return undefined;
 
-    const unsubscribeContactSettings = onSnapshot(
-      doc(db, "siteSettings", "contact"),
-      (snapshot) => {
-        if (!snapshot.exists()) return;
-        setContactSettings({ ...defaultContactSettings, ...(snapshot.data() as Partial<SiteContactSettings>) });
-      },
-      (error) => {
-        console.error("Could not load site contact settings from Firestore:", error);
+    const applyMenuSnapshot = (snapshot: Awaited<ReturnType<typeof getDoc>>) => {
+      hasSyncedMenuSettings.current = true;
+      setMenuSettingsReady(true);
+      if (!snapshot.exists()) return;
+
+      const data = snapshot.data() as { items?: MenuItem[] };
+      if (!Array.isArray(data.items)) return;
+
+      const normalizedItems = restoreMissingMenuItems(data.items);
+      lastMenuSettingsJson.current = JSON.stringify(normalizedItems);
+      setMenuItems(normalizedItems);
+    };
+
+    const applyProductCategoriesSnapshot = (snapshot: Awaited<ReturnType<typeof getDoc>>) => {
+      hasSyncedProductCategories.current = true;
+      setProductCategoriesReady(true);
+      if (!snapshot.exists()) {
+        lastProductCategoriesJson.current = JSON.stringify(productCategories);
+        return;
       }
-    );
 
-    const unsubscribePromoOverlaySettings = onSnapshot(
-      doc(db, "siteSettings", "promoOverlay"),
-      (snapshot) => {
-        if (!snapshot.exists()) return;
-        setPromoOverlaySettings({ ...defaultPromoOverlaySettings, ...(snapshot.data() as Partial<PromoOverlaySettings>) });
-      },
-      (error) => {
-        console.error("Could not load promo overlay settings from Firestore:", error);
+      const data = snapshot.data() as { items?: ProductCategory[] };
+      if (Array.isArray(data.items)) {
+        lastProductCategoriesJson.current = JSON.stringify(data.items);
+        setProductCategories(data.items);
       }
-    );
+    };
 
-    const unsubscribeMenuSettings = onSnapshot(
-      doc(db, "siteSettings", "menu"),
-      (snapshot) => {
-        hasSyncedMenuSettings.current = true;
-        setMenuSettingsReady(true);
-        if (!snapshot.exists()) return;
-
-        const data = snapshot.data() as { items?: MenuItem[] };
-        if (!Array.isArray(data.items)) return;
-
-        const normalizedItems = restoreMissingMenuItems(data.items);
-        lastMenuSettingsJson.current = JSON.stringify(normalizedItems);
-        setMenuItems(normalizedItems);
-      },
-      (error) => {
-        hasSyncedMenuSettings.current = true;
-        setMenuSettingsReady(true);
-        console.error("Could not load menu settings from Firestore:", error);
-      }
-    );
-
-    const unsubscribeProductCategories = onSnapshot(
-      doc(db, "siteSettings", "productCategories"),
-      (snapshot) => {
-        hasSyncedProductCategories.current = true;
-        setProductCategoriesReady(true);
-        if (!snapshot.exists()) {
-          lastProductCategoriesJson.current = JSON.stringify(productCategories);
-          return;
+    if (isAdminRoute) {
+      const unsubscribeContactSettings = onSnapshot(
+        doc(db, "siteSettings", "contact"),
+        (snapshot) => {
+          if (!snapshot.exists()) return;
+          setContactSettings({ ...defaultContactSettings, ...(snapshot.data() as Partial<SiteContactSettings>) });
+        },
+        (error) => {
+          console.error("Could not load site contact settings from Firestore:", error);
         }
-        const data = snapshot.data() as { items?: ProductCategory[] };
-        if (Array.isArray(data.items)) {
-          lastProductCategoriesJson.current = JSON.stringify(data.items);
-          setProductCategories(data.items);
+      );
+
+      const unsubscribePromoOverlaySettings = onSnapshot(
+        doc(db, "siteSettings", "promoOverlay"),
+        (snapshot) => {
+          if (!snapshot.exists()) return;
+          setPromoOverlaySettings({ ...defaultPromoOverlaySettings, ...(snapshot.data() as Partial<PromoOverlaySettings>) });
+        },
+        (error) => {
+          console.error("Could not load promo overlay settings from Firestore:", error);
         }
-      },
-      (error) => {
+      );
+
+      const unsubscribeMenuSettings = onSnapshot(
+        doc(db, "siteSettings", "menu"),
+        applyMenuSnapshot,
+        (error) => {
+          hasSyncedMenuSettings.current = true;
+          setMenuSettingsReady(true);
+          console.error("Could not load menu settings from Firestore:", error);
+        }
+      );
+
+      const unsubscribeProductCategories = onSnapshot(
+        doc(db, "siteSettings", "productCategories"),
+        applyProductCategoriesSnapshot,
+        (error) => {
+          hasSyncedProductCategories.current = true;
+          setProductCategoriesReady(true);
+          console.warn("Could not load product categories from Firestore:", error);
+        }
+      );
+
+      const unsubscribeProducts = onSnapshot(
+        collection(db, "products"),
+        (snapshot) => {
+          if (snapshot.empty) return;
+
+          const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
+          setProducts(items);
+        },
+        (error) => {
+          console.error("Could not load products from Firestore:", error);
+        }
+      );
+
+      const unsubscribeAcademyCourses = onSnapshot(
+        collection(db, "academyCourses"),
+        (snapshot) => {
+          if (snapshot.empty) return;
+
+          const items = sortCoursesNewestFirst(snapshot.docs.map((item) => item.data() as Course));
+          setAcademyCourses(items);
+        },
+        (error) => {
+          console.error("Could not load academy courses from Firestore:", error);
+        }
+      );
+
+      return () => {
+        unsubscribeContactSettings();
+        unsubscribePromoOverlaySettings();
+        unsubscribeMenuSettings();
+        unsubscribeProductCategories();
+        unsubscribeProducts();
+        unsubscribeAcademyCourses();
+      };
+    }
+
+    let cancelled = false;
+
+    const loadPublicFirestoreData = async () => {
+      try {
+        const [contactSnapshot, promoOverlaySnapshot, menuSnapshot, productCategoriesSnapshot] = await Promise.all([
+          getDoc(doc(db, "siteSettings", "contact")),
+          getDoc(doc(db, "siteSettings", "promoOverlay")),
+          getDoc(doc(db, "siteSettings", "menu")),
+          getDoc(doc(db, "siteSettings", "productCategories")),
+        ]);
+
+        if (cancelled) return;
+
+        if (contactSnapshot.exists()) {
+          setContactSettings({ ...defaultContactSettings, ...(contactSnapshot.data() as Partial<SiteContactSettings>) });
+        }
+        if (promoOverlaySnapshot.exists()) {
+          setPromoOverlaySettings({ ...defaultPromoOverlaySettings, ...(promoOverlaySnapshot.data() as Partial<PromoOverlaySettings>) });
+        }
+        applyMenuSnapshot(menuSnapshot);
+        applyProductCategoriesSnapshot(productCategoriesSnapshot);
+      } catch (error) {
+        if (cancelled) return;
+        hasSyncedMenuSettings.current = true;
         hasSyncedProductCategories.current = true;
+        setMenuSettingsReady(true);
         setProductCategoriesReady(true);
-        console.warn("Could not load product categories from Firestore:", error);
+        console.error("Could not load public site settings from Firestore:", error);
       }
-    );
 
-    const unsubscribeProducts = onSnapshot(
-      collection(db, "products"),
-      (snapshot) => {
-        if (snapshot.empty) return;
+      try {
+        if (shouldRefreshPublicFirestoreCache("voltara_products_last_firestore_sync")) {
+          const snapshot = await getDocs(collection(db, "products"));
+          if (!cancelled && !snapshot.empty) {
+            const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
+            setProducts(items);
+            localStorage.setItem("voltara_products_last_firestore_sync", String(Date.now()));
+          }
+        }
 
-        const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
-        setProducts(items);
-      },
-      (error) => {
-        console.error("Could not load products from Firestore:", error);
+        if (shouldRefreshPublicFirestoreCache("voltara_academy_courses_last_firestore_sync")) {
+          const snapshot = await getDocs(collection(db, "academyCourses"));
+          if (!cancelled && !snapshot.empty) {
+            const items = sortCoursesNewestFirst(snapshot.docs.map((item) => item.data() as Course));
+            setAcademyCourses(items);
+            localStorage.setItem("voltara_academy_courses_last_firestore_sync", String(Date.now()));
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Could not load public collection data from Firestore:", error);
+        }
       }
-    );
+    };
 
-    const unsubscribeAcademyCourses = onSnapshot(
-      collection(db, "academyCourses"),
-      (snapshot) => {
-        if (snapshot.empty) return;
-
-        const items = sortCoursesNewestFirst(snapshot.docs.map((item) => item.data() as Course));
-        setAcademyCourses(items);
-      },
-      (error) => {
-        console.error("Could not load academy courses from Firestore:", error);
-      }
-    );
+    loadPublicFirestoreData();
 
     return () => {
-      unsubscribeContactSettings();
-      unsubscribePromoOverlaySettings();
-      unsubscribeMenuSettings();
-      unsubscribeProductCategories();
-      unsubscribeProducts();
-      unsubscribeAcademyCourses();
+      cancelled = true;
     };
-  }, []);
+  }, [isAdminRoute]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !canReadAdminData || hasAttemptedProductMigration.current) return;
