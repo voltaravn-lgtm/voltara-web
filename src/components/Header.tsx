@@ -106,6 +106,18 @@ export default function Header() {
   };
 
   const { menuItems, productCategories, products, articles, openCart, cartCount } = useApp();
+  const isDealerOrderPage = location.pathname === "/dai-ly/dat-hang";
+  const handleCartClick = () => {
+    if (isDealerOrderPage) {
+      if (window.matchMedia("(max-width: 1023px)").matches) {
+        window.dispatchEvent(new CustomEvent("voltara:open-dealer-cart"));
+        return;
+      }
+      document.getElementById("dealer-order-cart")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    openCart();
+  };
   const visibleMenuItems = menuItems.filter((item) => !item.hidden);
   const visibleProductCategories = productCategories.filter((category) => !category.hidden);
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -241,7 +253,7 @@ export default function Header() {
             
             <button
               id="cart-header-btn"
-              onClick={openCart}
+              onClick={handleCartClick}
               className="relative p-1.5 text-gray-400 hover:text-gold-light transition-colors"
               title="Sản phẩm"
             >
@@ -266,7 +278,7 @@ export default function Header() {
           <div id="mobile-menu-trigger" className="flex lg:hidden items-center gap-3">
             <button
               id="cart-mobile-btn"
-              onClick={openCart}
+              onClick={handleCartClick}
               className="relative p-2 text-gray-400 hover:text-gold-light transition-colors"
             >
               <ShoppingCart className="w-5 h-5" />

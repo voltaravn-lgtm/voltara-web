@@ -85,6 +85,13 @@ export interface PromoOverlaySettings {
   updatedAt?: string;
 }
 
+export interface DealerPricingSettings {
+  level2DiscountPercent: number;
+  level1DiscountPercent: number;
+  level1ExtraDiscountPercent?: number;
+  updatedAt?: string;
+}
+
 function sortProductsNewestFirst(items: Product[]) {
   return [...items].sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -214,6 +221,8 @@ interface AppContextType {
   updateContactSettings: (settings: SiteContactSettings) => Promise<void>;
   promoOverlaySettings: PromoOverlaySettings;
   updatePromoOverlaySettings: (settings: PromoOverlaySettings) => Promise<void>;
+  dealerPricingSettings: DealerPricingSettings;
+  updateDealerPricingSettings: (settings: DealerPricingSettings) => Promise<void>;
   salesPrograms: SalesProgram[];
   addSalesProgram: (program: SalesProgram) => void;
   updateSalesProgram: (program: SalesProgram) => void;
@@ -243,6 +252,22 @@ export const defaultPromoOverlaySettings: PromoOverlaySettings = {
   endDate: "",
   library: [],
 };
+
+export const defaultDealerPricingSettings: DealerPricingSettings = {
+  level2DiscountPercent: 10,
+  level1DiscountPercent: 15,
+};
+
+function normalizeDealerPricingSettings(settings?: Partial<DealerPricingSettings>): DealerPricingSettings {
+  const level2 = Number(settings?.level2DiscountPercent ?? defaultDealerPricingSettings.level2DiscountPercent);
+  const legacyExtra = Number(settings?.level1ExtraDiscountPercent ?? 0);
+  return {
+    ...defaultDealerPricingSettings,
+    ...settings,
+    level2DiscountPercent: level2,
+    level1DiscountPercent: Number(settings?.level1DiscountPercent ?? (level2 + legacyExtra || defaultDealerPricingSettings.level1DiscountPercent)),
+  };
+}
 
 const defaultMenuBannerImages: Record<string, string> = {
   "/": "/images/voltara_banner.webp",
@@ -595,6 +620,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem("voltara_promo_overlay_settings");
     return saved ? { ...defaultPromoOverlaySettings, ...JSON.parse(saved) } : defaultPromoOverlaySettings;
   });
+  const [dealerPricingSettings, setDealerPricingSettings] = useState<DealerPricingSettings>(() => {
+    const saved = localStorage.getItem("voltara_dealer_pricing_settings");
+    return saved ? normalizeDealerPricingSettings(JSON.parse(saved)) : defaultDealerPricingSettings;
+  });
   const [salesPrograms, setSalesPrograms] = useState<SalesProgram[]>(() => {
     const saved = localStorage.getItem("voltara_sales_programs");
     return saved ? JSON.parse(saved) : [];
@@ -692,6 +721,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       );
 
+      const unsubscribeDealerPricing = onSnapshot(
+        doc(db, "siteSettings", "dealerPricing"),
+        (snapshot) => {
+          if (!snapshot.exists()) return;
+          setDealerPricingSettings(normalizeDealerPricingSettings(snapshot.data() as Partial<DealerPricingSettings>));
+        },
+        (error) => console.error("Could not load dealer pricing settings:", error)
+      );
+
       const unsubscribeMenuSettings = onSnapshot(
         doc(db, "siteSettings", "menu"),
         applyMenuSnapshot,
@@ -741,6 +779,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return () => {
         unsubscribeContactSettings();
         unsubscribePromoOverlaySettings();
+        unsubscribeDealerPricing();
         unsubscribeMenuSettings();
         unsubscribeProductCategories();
         unsubscribeProducts();
@@ -752,11 +791,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadPublicFirestoreData = async () => {
       try {
-        const [contactSnapshot, promoOverlaySnapshot, menuSnapshot, productCategoriesSnapshot] = await Promise.all([
+        const [contactSnapshot, promoOverlaySnapshot, menuSnapshot, productCategoriesSnapshot, dealerPricingSnapshot] = await Promise.all([
           getDoc(doc(db, "siteSettings", "contact")),
           getDoc(doc(db, "siteSettings", "promoOverlay")),
           getDoc(doc(db, "siteSettings", "menu")),
           getDoc(doc(db, "siteSettings", "productCategories")),
+          getDoc(doc(db, "siteSettings", "dealerPricing")),
         ]);
 
         if (cancelled) return;
@@ -769,6 +809,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         applyMenuSnapshot(menuSnapshot);
         applyProductCategoriesSnapshot(productCategoriesSnapshot);
+        if (dealerPricingSnapshot.exists()) {
+          setDealerPricingSettings(normalizeDealerPricingSettings(dealerPricingSnapshot.data() as Partial<DealerPricingSettings>));
+        }
       } catch (error) {
         if (cancelled) return;
         hasSyncedMenuSettings.current = true;
@@ -950,6 +993,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [products]);
 
   useEffect(() => {
+    const syncProductsAcrossTabs = (event: StorageEvent) => {
+      if (event.key !== "voltara_products" || !event.newValue) return;
+      try {
+        setProducts(sortProductsNewestFirst(JSON.parse(event.newValue) as Product[]));
+      } catch (error) {
+        console.warn("Could not sync product prices across tabs:", error);
+      }
+    };
+    window.addEventListener("storage", syncProductsAcrossTabs);
+    return () => window.removeEventListener("storage", syncProductsAcrossTabs);
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem("voltara_solutions", JSON.stringify(solutions));
   }, [solutions]);
 
@@ -1004,6 +1060,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem("voltara_promo_overlay_settings", JSON.stringify(promoOverlaySettings));
   }, [promoOverlaySettings]);
+
+  useEffect(() => {
+    localStorage.setItem("voltara_dealer_pricing_settings", JSON.stringify(dealerPricingSettings));
+  }, [dealerPricingSettings]);
 
   useEffect(() => {
     localStorage.setItem("voltara_sales_programs", JSON.stringify(salesPrograms));
@@ -1383,6 +1443,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateDealerPricingSettings = async (settings: DealerPricingSettings) => {
+    const nextSettings = {
+      ...normalizeDealerPricingSettings(settings),
+      updatedAt: new Date().toISOString(),
+    };
+    setDealerPricingSettings(nextSettings);
+    if (isFirebaseConfigured) {
+      await setDoc(doc(db, "siteSettings", "dealerPricing"), nextSettings, { merge: true });
+    }
+  };
+
   const addSalesProgram = (program: SalesProgram) => {
     setSalesPrograms(prev => [
       ...prev,
@@ -1508,6 +1579,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateContactSettings,
         promoOverlaySettings,
         updatePromoOverlaySettings,
+        dealerPricingSettings,
+        updateDealerPricingSettings,
         salesPrograms,
         addSalesProgram,
         updateSalesProgram,

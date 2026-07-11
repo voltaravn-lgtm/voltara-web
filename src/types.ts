@@ -21,6 +21,12 @@ export interface Product {
   subCategory?: string;
   price?: string;
   salePrice?: string;
+  retailPrice?: string;
+  dealerLevel1Price?: string;
+  dealerLevel2Price?: string;
+  dealerDiscountPercent?: number;
+  dealerLevel1DiscountPercent?: number;
+  dealerLevel2DiscountPercent?: number;
   sku?: string;
   barcode?: string;
   stockQuantity?: string;
@@ -192,6 +198,51 @@ export interface Dealer {
   address: string;
   phone: string;
   isHQ?: boolean;
+}
+
+export interface DealerAccount {
+  uid: string;
+  dealerCode: string;
+  name: string;
+  email: string;
+  phone?: string;
+  level: 1 | 2;
+  status: "active" | "locked";
+  customDiscountPercent?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DealerOrderRecord {
+  id: string;
+  dealerUid: string;
+  dealerCode: string;
+  dealerName: string;
+  dealerLevel: 1 | 2;
+  recipientName: string;
+  recipientPhone: string;
+  deliveryAddress: string;
+  province?: string;
+  district?: string;
+  ward?: string;
+  streetAddress?: string;
+  postMergerAddress?: string;
+  note?: string;
+  items: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    image: string;
+    quantity: number;
+    retailPrice: number;
+    dealerPrice: number;
+  }>;
+  retailTotal: number;
+  discountTotal: number;
+  total: number;
+  status: "new" | "confirmed" | "contacting" | "completed" | "cancelled";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface HomeContent {

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product, ProductVariant, ProductCombo } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
-import { getProductDescriptionExcerpt } from "../../lib/productDescription";
 import { getProductSlug, slugifyProductText } from "../../lib/productRoutes";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../lib/video";
 import {
@@ -38,6 +37,12 @@ const createBlankProductForm = (id = ""): Partial<Product> => ({
   subCategory: "",
   price: "",
   salePrice: "",
+  retailPrice: "",
+  dealerLevel1Price: "",
+  dealerLevel2Price: "",
+  dealerDiscountPercent: undefined,
+  dealerLevel1DiscountPercent: undefined,
+  dealerLevel2DiscountPercent: undefined,
   variants: [],
   combos: [],
   sku: "",
@@ -296,6 +301,10 @@ export default function ProductsAdmin() {
   const [comboProductQueries, setComboProductQueries] = useState<Record<number, string>>({});
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productVisibilityFilter, setProductVisibilityFilter] = useState<"all" | "visible" | "hidden">("all");
+  const [productPriceFilter, setProductPriceFilter] = useState<"all" | "missing" | "complete" | "variants">("all");
+  const [quickPriceDrafts, setQuickPriceDrafts] = useState<Record<string, string>>({});
+  const [quickVariantPriceDrafts, setQuickVariantPriceDrafts] = useState<Record<string, string>>({});
+  const [savingQuickPriceId, setSavingQuickPriceId] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newChildCategoryNames, setNewChildCategoryNames] = useState<Record<string, string>>({});
   
@@ -347,6 +356,66 @@ export default function ProductsAdmin() {
     return numeric ? Number(numeric) : 0;
   };
   const formatAdminPrice = (value: number) => value ? String(value) : "";
+  const getQuickPriceValue = (product: Product) => quickPriceDrafts[product.id] ?? product.retailPrice ?? product.price ?? "";
+  const hasQuickPriceChange = (product: Product) =>
+    Object.prototype.hasOwnProperty.call(quickPriceDrafts, product.id) &&
+    quickPriceDrafts[product.id] !== (product.retailPrice ?? product.price ?? "");
+  const handleSaveQuickPrice = async (product: Product) => {
+    const draft = String(quickPriceDrafts[product.id] || "").trim();
+    if (!parsePriceValue(draft)) {
+      showToast("Vui lòng nhập giá bán lẻ hợp lệ.", "warning");
+      return;
+    }
+    if (!window.confirm(`Xác nhận đổi giá bán lẻ của "${product.name}" thành ${draft}?`)) return;
+    setSavingQuickPriceId(product.id);
+    try {
+      await updateProduct({ ...product, price: draft, retailPrice: draft });
+      setQuickPriceDrafts((current) => {
+        const next = { ...current };
+        delete next[product.id];
+        return next;
+      });
+      showToast("Đã cập nhật giá bán lẻ và lưu lên Firebase.", "success");
+    } finally {
+      setSavingQuickPriceId(null);
+    }
+  };
+  const getVariantDraftKey = (productId: string, variantId: string) => `${productId}::${variantId}`;
+  const getQuickVariantPriceValue = (product: Product, variant: ProductVariant) =>
+    quickVariantPriceDrafts[getVariantDraftKey(product.id, variant.id)] ?? variant.price ?? "";
+  const hasQuickVariantPriceChange = (product: Product, variant: ProductVariant) => {
+    const key = getVariantDraftKey(product.id, variant.id);
+    return Object.prototype.hasOwnProperty.call(quickVariantPriceDrafts, key) && quickVariantPriceDrafts[key] !== (variant.price ?? "");
+  };
+  const handleSaveQuickVariantPrice = async (product: Product, variant: ProductVariant) => {
+    const key = getVariantDraftKey(product.id, variant.id);
+    const draft = String(quickVariantPriceDrafts[key] || "").trim();
+    if (!parsePriceValue(draft)) {
+      showToast("Vui lòng nhập giá phân loại hợp lệ.", "warning");
+      return;
+    }
+    if (!window.confirm(`Xác nhận đổi giá phân loại "${variant.name}" thành ${draft}?`)) return;
+    setSavingQuickPriceId(key);
+    try {
+      await updateProduct({
+        ...product,
+        variants: (product.variants || []).map((item) => item.id === variant.id ? { ...item, price: draft } : item),
+      });
+      setQuickVariantPriceDrafts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      showToast("Đã cập nhật giá phân loại và lưu lên Firebase.", "success");
+    } finally {
+      setSavingQuickPriceId(null);
+    }
+  };
+  const productHasMissingPrice = (product: Product) => {
+    const variants = product.variants || [];
+    if (variants.length > 0) return variants.some((variant) => !parsePriceValue(variant.salePrice || variant.price));
+    return !parsePriceValue(product.retailPrice || product.salePrice || product.price);
+  };
   const getComboOriginalPrice = (combo: ProductCombo) =>
     (combo.items || []).reduce((total, item) => {
       const quantity = Math.max(1, Number(item.quantity || 1));
@@ -782,8 +851,14 @@ export default function ProductsAdmin() {
       const matchesVisibility =
         productVisibilityFilter === "all" ||
         (productVisibilityFilter === "hidden" ? Boolean(prod.hidden) : !prod.hidden);
+      const missingPrice = productHasMissingPrice(prod);
+      const matchesPrice =
+        productPriceFilter === "all" ||
+        (productPriceFilter === "missing" && missingPrice) ||
+        (productPriceFilter === "complete" && !missingPrice) ||
+        (productPriceFilter === "variants" && (prod.variants || []).length > 0);
 
-      return matchesSearch && matchesVisibility;
+      return matchesSearch && matchesVisibility && matchesPrice;
     })
     .sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -1680,7 +1755,7 @@ export default function ProductsAdmin() {
 
       <div className="border border-white/5 bg-black/40 p-4 space-y-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-          <div className="lg:col-span-5 relative">
+          <div className="lg:col-span-4 relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
             <input
               type="search"
@@ -1694,11 +1769,22 @@ export default function ProductsAdmin() {
           <select
             value={productVisibilityFilter}
             onChange={(e) => setProductVisibilityFilter(e.target.value as "all" | "visible" | "hidden")}
-            className="lg:col-span-3 bg-black border border-[#1A1A1A] text-[#ECECEC] px-3 py-2.5 text-xs focus:outline-none focus:border-gold-light font-display font-bold uppercase"
+            className="lg:col-span-2 bg-black border border-[#1A1A1A] text-[#ECECEC] px-3 py-2.5 text-xs focus:outline-none focus:border-gold-light font-display font-bold uppercase"
           >
             <option value="all">Tất cả trạng thái</option>
             <option value="visible">Đang hiển thị</option>
             <option value="hidden">Đang ẩn</option>
+          </select>
+
+          <select
+            value={productPriceFilter}
+            onChange={(e) => setProductPriceFilter(e.target.value as "all" | "missing" | "complete" | "variants")}
+            className="lg:col-span-2 bg-black border border-[#1A1A1A] text-[#ECECEC] px-3 py-2.5 text-xs focus:outline-none focus:border-gold-light font-display font-bold uppercase"
+          >
+            <option value="all">Tất cả giá</option>
+            <option value="missing">Chưa đủ giá</option>
+            <option value="complete">Đã đủ giá</option>
+            <option value="variants">Có phân loại</option>
           </select>
 
           <div className="lg:col-span-4 flex items-stretch justify-between gap-2">
@@ -1784,15 +1870,67 @@ export default function ProductsAdmin() {
                     </span>
                   </div>
                   <h3 className="text-xs font-display font-bold text-white uppercase line-clamp-1 leading-snug">{prod.name}</h3>
-                  <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                    <span className="text-gray-500 font-bold">{prod.salePrice || prod.price || "Liên hệ"}</span>
-                    <span className="text-gray-600">/</span>
-                    <span className="text-gray-500 font-mono uppercase">{getCategoryDisplayName(prod.category, prod.subCategory)}</span>
+                  <div className="flex flex-wrap items-end gap-2 pt-1">
+                    <label className="min-w-[170px] flex-1 space-y-1">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-gray-500">Giá bán lẻ / Giá web</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={getQuickPriceValue(prod)}
+                        onChange={(e) => setQuickPriceDrafts((current) => ({ ...current, [prod.id]: e.target.value }))}
+                        placeholder="Nhập giá bán lẻ"
+                        className={`w-full border bg-[#0b0b0b] px-3 py-2 text-xs font-bold text-white outline-none ${hasQuickPriceChange(prod) ? "border-gold-light" : "border-white/10 focus:border-gold-dark"}`}
+                      />
+                    </label>
+                    {hasQuickPriceChange(prod) && (
+                      <button
+                        type="button"
+                        disabled={savingQuickPriceId === prod.id}
+                        onClick={() => handleSaveQuickPrice(prod)}
+                        className="flex items-center gap-1 bg-gold-light px-3 py-2 text-[10px] font-black uppercase text-black disabled:opacity-50"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        {savingQuickPriceId === prod.id ? "Đang lưu" : "Xác nhận"}
+                      </button>
+                    )}
+                    {prod.salePrice && <span className="pb-2 text-[9px] font-bold text-emerald-400">KM: {prod.salePrice}</span>}
                   </div>
-                  {adminViewMode === "grid" && (
-                    <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">
-                      {getProductDescriptionExcerpt(prod.description, prod.name, 140)}
-                    </p>
+
+                  {(prod.variants || []).length > 0 && (
+                    <div className="mt-2 space-y-1.5 border-t border-white/5 pt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gold-light">Giá theo phân loại</span>
+                        <span className="text-[9px] text-gray-600">{prod.variants?.length} phân loại</span>
+                      </div>
+                      {(prod.variants || []).map((variant) => {
+                        const key = getVariantDraftKey(prod.id, variant.id);
+                        return (
+                          <div key={variant.id} className={`grid grid-cols-[minmax(0,1fr)_125px_auto] items-center gap-2 border px-2 py-1.5 ${!parsePriceValue(variant.salePrice || variant.price) ? "border-red-500/25 bg-red-500/5" : "border-white/5 bg-white/[.02]"}`}>
+                            <div className="min-w-0">
+                              <b className="block truncate text-[10px] text-gray-300">{variant.name}</b>
+                              <span className="font-mono text-[8px] text-gray-600">{variant.sku || variant.id}</span>
+                            </div>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={getQuickVariantPriceValue(prod, variant)}
+                              onChange={(e) => setQuickVariantPriceDrafts((current) => ({ ...current, [key]: e.target.value }))}
+                              placeholder="Chưa có giá"
+                              className={`w-full border bg-black px-2 py-1.5 text-[10px] font-bold text-white outline-none ${hasQuickVariantPriceChange(prod, variant) ? "border-gold-light" : "border-white/10"}`}
+                            />
+                            {hasQuickVariantPriceChange(prod, variant) ? (
+                              <button
+                                type="button"
+                                disabled={savingQuickPriceId === key}
+                                onClick={() => handleSaveQuickVariantPrice(prod, variant)}
+                                className="bg-gold-light p-1.5 text-black disabled:opacity-50"
+                                title="Xác nhận lưu giá phân loại"
+                              ><Save className="h-3.5 w-3.5" /></button>
+                            ) : <span className={`h-2 w-2 rounded-full ${parsePriceValue(variant.salePrice || variant.price) ? "bg-emerald-500" : "bg-red-500"}`} title={parsePriceValue(variant.salePrice || variant.price) ? "Đã có giá" : "Chưa có giá"} />}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
 
                 </div>
@@ -2006,6 +2144,30 @@ export default function ProductsAdmin() {
                   ) : (
                     <div className="border border-dashed border-white/10 bg-black/40 px-4 py-5 text-[10px] text-gray-500">Chưa có phân loại. Sản phẩm sẽ hiện một giá và một ảnh đại diện như hiện tại.</div>
                   )}
+                </div>
+
+                <div className="col-span-1 sm:col-span-2 border border-gold-dark/25 bg-[#080808] p-4">
+                  <div className="mb-3">
+                    <h3 className="text-[11px] font-display font-black uppercase tracking-widest text-gold-light">Bảng giá đại lý</h3>
+                    <p className="mt-1 text-[10px] text-gray-500">Giá bán lẻ là giá web/cửa hàng. Cấp 1 lấy trực tiếp từ NSX nên giá phải thấp hơn cấp 2.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                    <label className="space-y-1 text-[9px] font-bold uppercase text-gray-400">Giá bán lẻ
+                      <input type="text" value={productForm.retailPrice || ""} onChange={(e) => setProductForm(prev => ({ ...prev, retailPrice: e.target.value }))} placeholder={productForm.salePrice || productForm.price || "Giá web"} className="w-full bg-black border border-[#1A1A1A] px-3 py-2.5 text-xs text-white focus:border-gold-light focus:outline-none" />
+                    </label>
+                    <label className="space-y-1 text-[9px] font-bold uppercase text-gray-400">Giá đại lý cấp 2
+                      <input type="text" value={productForm.dealerLevel2Price || ""} onChange={(e) => setProductForm(prev => ({ ...prev, dealerLevel2Price: e.target.value }))} placeholder="Thấp hơn 20–35%" className="w-full bg-black border border-[#1A1A1A] px-3 py-2.5 text-xs text-white focus:border-gold-light focus:outline-none" />
+                    </label>
+                    <label className="space-y-1 text-[9px] font-bold uppercase text-gray-400">Giá đại lý cấp 1
+                      <input type="text" value={productForm.dealerLevel1Price || ""} onChange={(e) => setProductForm(prev => ({ ...prev, dealerLevel1Price: e.target.value }))} placeholder="Giá riêng cấp 1" className="w-full bg-black border border-[#1A1A1A] px-3 py-2.5 text-xs text-white focus:border-gold-light focus:outline-none" />
+                    </label>
+                    <label className="space-y-1 text-[9px] font-bold uppercase text-gray-400">CK cấp 2 (% giá bán)
+                      <input type="number" min="0" max="90" value={productForm.dealerLevel2DiscountPercent ?? ""} onChange={(e) => setProductForm(prev => ({ ...prev, dealerLevel2DiscountPercent: e.target.value === "" ? undefined : Number(e.target.value) }))} placeholder="Theo mức chung" className="w-full bg-black border border-[#1A1A1A] px-3 py-2.5 text-xs text-white focus:border-gold-light focus:outline-none" />
+                    </label>
+                    <label className="space-y-1 text-[9px] font-bold uppercase text-gray-400">CK cấp 1 (% giá bán)
+                      <input type="number" min="0" max="90" value={productForm.dealerLevel1DiscountPercent ?? ""} onChange={(e) => setProductForm(prev => ({ ...prev, dealerLevel1DiscountPercent: e.target.value === "" ? undefined : Number(e.target.value) }))} placeholder="Theo mức chung" className="w-full bg-black border border-[#1A1A1A] px-3 py-2.5 text-xs text-white focus:border-gold-light focus:outline-none" />
+                    </label>
+                  </div>
                 </div>
 
                 {activeProductSubCategories.length > 0 && (

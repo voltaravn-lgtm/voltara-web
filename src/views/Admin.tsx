@@ -32,12 +32,16 @@ import {
   Calculator,
   MapPin,
   Gift
+  ,PackageCheck
 } from "lucide-react";
 
 import HomePageAdmin from "./Admin/HomePageAdmin";
 import AboutPageAdmin from "./Admin/AboutPageAdmin";
 import ProductsAdmin from "./Admin/ProductsAdmin";
 import SalesProgramsAdmin from "./Admin/SalesProgramsAdmin";
+import DealerPricingAdmin from "./Admin/DealerPricingAdmin";
+import DealerAccountsAdmin from "./Admin/DealerAccountsAdmin";
+import DealerOrdersAdmin from "./Admin/DealerOrdersAdmin";
 import KnowledgeAdmin from "./Admin/KnowledgeAdmin";
 import AcademyAdmin from "./Admin/AcademyAdmin";
 import RecruitmentAdmin from "./Admin/RecruitmentAdmin";
@@ -69,7 +73,7 @@ export default function Admin() {
     deleteQuoteRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "salesPrograms" | "homepage" | "aboutpage" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
+  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "dealerPricing" | "dealerAccounts" | "dealerOrders" | "salesPrograms" | "homepage" | "aboutpage" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
 
   // Hero config state & multi-slides control
   const [heroTitle, setHeroTitle] = useState(heroSettings.title);
@@ -320,6 +324,37 @@ export default function Admin() {
                 Chương trình bán hàng
               </span>
               <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "salesPrograms" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-dealer-pricing"
+              onClick={() => setActiveTab("dealerPricing")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${
+                activeTab === "dealerPricing"
+                  ? "bg-gold-dark/10 border-gold-light text-gold-light shadow-[0_0_15px_rgba(216,154,43,0.15)]"
+                  : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-3"><DollarSign className="w-4 h-4" /> Giá đại lý</span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "dealerPricing" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-dealer-accounts"
+              onClick={() => setActiveTab("dealerAccounts")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${activeTab === "dealerAccounts" ? "bg-gold-dark/10 border-gold-light text-gold-light" : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"}`}
+            >
+              <span className="flex items-center gap-3"><ShieldCheck className="w-4 h-4" /> Tài khoản đại lý</span>
+              <ChevronRight className={`w-4 h-4 ${activeTab === "dealerAccounts" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-dealer-orders"
+              onClick={() => setActiveTab("dealerOrders")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${activeTab === "dealerOrders" ? "bg-gold-dark/10 border-gold-light text-gold-light" : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"}`}
+            >
+              <span className="flex items-center gap-3"><PackageCheck className="w-4 h-4" /> Đơn hàng đại lý</span>
+              <ChevronRight className={`w-4 h-4 ${activeTab === "dealerOrders" ? "rotate-90 text-gold-light" : ""}`} />
             </button>
 
             <button
@@ -915,6 +950,12 @@ export default function Admin() {
 
             {/* T3. INVENTORY PRODUCTS MANAGEMENT */}
             {activeTab === "products" && <ProductsAdmin />}
+
+            {activeTab === "dealerPricing" && <DealerPricingAdmin />}
+
+            {activeTab === "dealerAccounts" && <DealerAccountsAdmin />}
+
+            {activeTab === "dealerOrders" && <DealerOrdersAdmin />}
 
             {activeTab === "salesPrograms" && <SalesProgramsAdmin />}
 

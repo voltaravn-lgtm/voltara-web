@@ -29,6 +29,9 @@ export default function Dealer() {
 
   return (
     <div id="dealer-page" className="pb-20 relative bg-[#050505] text-left">
+      <Link to="/dai-ly/dat-hang" className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-[46] flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-gold-dark to-gold-light px-5 py-3.5 text-xs font-black uppercase tracking-wider text-black shadow-[0_8px_30px_rgba(216,154,43,.35)] hover:brightness-110 md:bottom-6 md:left-auto md:right-6 md:z-40 md:py-3">
+        Đặt hàng đại lý <ChevronRight className="h-4 w-4" />
+      </Link>
       {/* 1. HERO BANNER - FULL WIDTH */}
       <section className="relative min-h-[45vh] lg:min-h-[55vh] flex items-center overflow-hidden bg-black pt-16 lg:pt-24 pb-16 lg:pb-24 mb-12">
         {/* Full-screen Background Banner Image */}

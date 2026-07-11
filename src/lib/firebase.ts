@@ -2,7 +2,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyAivwJH9O3eFa1wa50U7MTotXqg1gJR6x0",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "voltara-61aa5.firebaseapp.com",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "voltara-61aa5",
