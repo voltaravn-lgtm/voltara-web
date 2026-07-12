@@ -1,0 +1,6 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { landingSuccessEventNames, validLandingTrackingIds } from '../src/lib/landing/landingTracking.ts';
+test('Landing không Pixel không trả ID tải script', () => { assert.deepEqual(validLandingTrackingIds({}), { metaPixelId: undefined, tiktokPixelId: undefined, googleTagManagerId: undefined }); });
+test('chỉ chấp nhận từng loại Pixel ID hợp lệ', () => { assert.equal(validLandingTrackingIds({ metaPixelId: '1234567890' }).metaPixelId, '1234567890'); assert.equal(validLandingTrackingIds({ tiktokPixelId: 'C123456789ABCDE' }).tiktokPixelId, 'C123456789ABCDE'); assert.equal(validLandingTrackingIds({ googleTagManagerId: 'gtm-abc123' }).googleTagManagerId, 'GTM-ABC123'); assert.deepEqual(validLandingTrackingIds({ metaPixelId: '<script>', tiktokPixelId: 'x', googleTagManagerId: 'GA-1' }), { metaPixelId: undefined, tiktokPixelId: undefined, googleTagManagerId: undefined }); });
+test('sự kiện thành công phân biệt đặt hàng và lead', () => { assert.equal(landingSuccessEventNames('order').meta, 'Purchase'); assert.equal(landingSuccessEventNames('consultation').meta, 'Lead'); assert.equal(landingSuccessEventNames('phone-only').tiktok, 'SubmitForm'); });

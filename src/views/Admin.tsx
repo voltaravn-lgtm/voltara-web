@@ -32,7 +32,9 @@ import {
   Calculator,
   MapPin,
   Gift
-  ,PackageCheck
+  ,PackageCheck,
+  PanelsTopLeft,
+  ShoppingBag
 } from "lucide-react";
 
 import HomePageAdmin from "./Admin/HomePageAdmin";
@@ -52,6 +54,8 @@ import WarrantyAdmin from "./Admin/WarrantyAdmin";
 import QuotesAdmin from "./Admin/QuotesAdmin";
 import NewsletterAdmin from "./Admin/NewsletterAdmin";
 import SiteContactAdmin from "./Admin/SiteContactAdmin";
+import LandingPagesAdmin from "./Admin/LandingPagesAdmin";
+import LandingOrdersAdmin from "./Admin/LandingOrdersAdmin";
 
 export default function Admin() {
   const {
@@ -73,7 +77,7 @@ export default function Admin() {
     deleteQuoteRequest
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "dealerPricing" | "dealerAccounts" | "dealerOrders" | "salesPrograms" | "homepage" | "aboutpage" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
+  const [activeTab, setActiveTab] = useState<"hero" | "menu" | "webp" | "products" | "landingPages" | "landingOrders" | "dealerPricing" | "dealerAccounts" | "dealerOrders" | "salesPrograms" | "homepage" | "aboutpage" | "knowledge" | "academy" | "recruitment" | "contacts" | "contactSettings" | "quotes" | "newsletter" | "solutions" | "dealers" | "warranties">("hero");
 
   // Hero config state & multi-slides control
   const [heroTitle, setHeroTitle] = useState(heroSettings.title);
@@ -324,6 +328,24 @@ export default function Admin() {
                 Chương trình bán hàng
               </span>
               <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "salesPrograms" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-landing-pages"
+              onClick={() => setActiveTab("landingPages")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${activeTab === "landingPages" ? "bg-gold-dark/10 border-gold-light text-gold-light shadow-[0_0_15px_rgba(216,154,43,0.15)]" : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"}`}
+            >
+              <span className="flex items-center gap-3"><PanelsTopLeft className="w-4 h-4" /> Landing Pages</span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "landingPages" ? "rotate-90 text-gold-light" : ""}`} />
+            </button>
+
+            <button
+              id="admin-tab-landing-orders"
+              onClick={() => setActiveTab("landingOrders")}
+              className={`w-full flex items-center justify-between text-left px-5 py-4 font-display text-xs font-bold tracking-widest uppercase transition-all duration-300 border ${activeTab === "landingOrders" ? "bg-gold-dark/10 border-gold-light text-gold-light shadow-[0_0_15px_rgba(216,154,43,0.15)]" : "bg-black/40 border-[#1A1A1A] text-gray-400 hover:border-gold-dark/30 hover:text-white"}`}
+            >
+              <span className="flex items-center gap-3"><ShoppingBag className="w-4 h-4" /> Đơn Landing Page</span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === "landingOrders" ? "rotate-90 text-gold-light" : ""}`} />
             </button>
 
             <button
@@ -950,6 +972,10 @@ export default function Admin() {
 
             {/* T3. INVENTORY PRODUCTS MANAGEMENT */}
             {activeTab === "products" && <ProductsAdmin />}
+
+            {activeTab === "landingPages" && <LandingPagesAdmin />}
+
+            {activeTab === "landingOrders" && <LandingOrdersAdmin />}
 
             {activeTab === "dealerPricing" && <DealerPricingAdmin />}
 

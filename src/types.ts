@@ -357,3 +357,5 @@ export interface QuoteRequest {
   date: string;
   status: "Chờ xử lý" | "Đã liên hệ" | "Đã báo giá" | "Hủy";
 }
+
+export * from "./types/landing";

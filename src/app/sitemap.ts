@@ -2,8 +2,9 @@ import { MetadataRoute } from "next";
 import { getBuildProducts } from "../lib/productData";
 import { getProductSlug } from "../lib/productRoutes";
 import { siteUrl } from "../lib/seo";
+import { listPublishedLandingsForSitemap } from "../lib/landing/landingSitemapRepository";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 const routes = [
   "",
@@ -21,7 +22,7 @@ const routes = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
-  const products = await getBuildProducts();
+  const [products, landings] = await Promise.all([getBuildProducts(), listPublishedLandingsForSitemap()]);
 
   const pageRoutes = routes.map((route) => ({
     url: new URL(route || "/", siteUrl).toString(),
@@ -37,5 +38,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...pageRoutes, ...productRoutes];
+  const landingRoutes = landings.map((landing) => ({
+    url: new URL(`/landing/${landing.slug}`, siteUrl).toString(),
+    lastModified: landing.updatedAt ? new Date(landing.updatedAt) : lastModified,
+    changeFrequency: "weekly" as const,
+    priority: 0.85,
+  }));
+
+  return [...pageRoutes, ...productRoutes, ...landingRoutes];
 }

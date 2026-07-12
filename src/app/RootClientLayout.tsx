@@ -6,6 +6,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import MobileQuickAccess from "../components/MobileQuickAccess";
 import ToastContainer from "../components/ToastContainer";
+import { usePathname } from "next/navigation";
 
 export default function RootClientLayout({
   children,
@@ -13,10 +14,15 @@ export default function RootClientLayout({
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Landing Pages have their own lightweight shell and must not initialize
+  // AppContext (which subscribes to the full Product catalog).
+  if (pathname?.startsWith('/landing/')) return <>{children}</>;
 
   if (!mounted) {
     return (

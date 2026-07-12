@@ -316,3 +316,51 @@ body.day-mode .product-description-content tr:first-child td {
   background: rgba(216, 154, 43, 0.15);
   color: #111827;
 }
+
+/* Landing Design System: shared by Builder Preview and /landing/[slug]. */
+.landing-root {
+  background: var(--landing-bg);
+  color: var(--landing-text);
+  font-family: var(--landing-body-font);
+}
+.landing-root .landing-section {
+  padding-top: var(--landing-section-space);
+  padding-bottom: var(--landing-section-space);
+}
+.landing-root .landing-section > div,
+.landing-root .landing-section > form {
+  max-width: var(--landing-container) !important;
+}
+.landing-root h1, .landing-root h2, .landing-root h3, .landing-root h4, .landing-root h5, .landing-root h6 {
+  font-family: var(--landing-heading-font);
+}
+.landing-root .text-gold-light { color: var(--landing-accent) !important; }
+.landing-root .bg-gold-light { background-color: var(--landing-primary) !important; }
+.landing-root [class*="border-gold"] { border-color: color-mix(in srgb, var(--landing-primary) 45%, transparent) !important; }
+.landing-root .landing-section [class*="border"] { border-radius: var(--landing-radius); }
+.landing-root .landing-section img,
+.landing-root .landing-section video,
+.landing-root .landing-section iframe { border-radius: var(--landing-radius); }
+.landing-root .landing-section [class*="shadow"] { box-shadow: var(--landing-shadow); }
+.landing-root .landing-button,
+.landing-root button.bg-gold-light,
+.landing-root a.bg-gold-light {
+  border: 2px solid var(--landing-primary);
+  border-radius: var(--landing-radius);
+  background: var(--landing-primary);
+  color: #090909;
+  box-shadow: var(--landing-shadow);
+}
+.landing-root[data-button-style="outline"] .landing-button,
+.landing-root[data-button-style="outline"] button.bg-gold-light,
+.landing-root[data-button-style="outline"] a.bg-gold-light { background: transparent !important; color: var(--landing-primary) !important; }
+.landing-root[data-button-style="pill"] .landing-button,
+.landing-root[data-button-style="pill"] button.bg-gold-light,
+.landing-root[data-button-style="pill"] a.bg-gold-light { border-radius: 999px; }
+.landing-animate-fade { animation: landing-fade .55s ease both; }
+.landing-animate-zoom { animation: landing-zoom .55s ease both; }
+@keyframes landing-fade { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes landing-zoom { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .landing-animate-fade, .landing-animate-zoom { animation: none; }
+}
