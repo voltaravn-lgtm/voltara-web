@@ -39,6 +39,19 @@ export function normalizeLandingSlug(value: string) {
     .replace(/-{2,}/g, "-");
 }
 
+export function sanitizeLandingSlugInput(value: string) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/Ä‘/g, "d")
+    .replace(/Ä/g, "d")
+    .toLowerCase()
+    .trimStart()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
 export function validateLandingSlug(value: string): LandingValidationResult {
   const slug = normalizeLandingSlug(value);
   const errors: string[] = [];
