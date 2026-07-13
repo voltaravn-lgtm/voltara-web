@@ -49,6 +49,12 @@ function dealerPriceOf(product: Product, level: 1 | 2, level1Discount: number, l
   return Math.round(retailOf(product) * (1 - Math.min(discount, 90) / 100));
 }
 
+function isUsableDealerAccount(account: DealerAccount | null): account is DealerAccount {
+  if (!account || account.status !== 'active') return false;
+  if (account.dealerCode === 'ADMIN') return true;
+  return Boolean(account.uid && account.dealerCode?.trim() && account.name?.trim() && (account.level === 1 || account.level === 2));
+}
+
 export default function DealerOrder() {
   const { products, productCategories, dealerPricingSettings, showToast } = useApp();
   const [query, setQuery] = useState('');
@@ -79,6 +85,9 @@ export default function DealerOrder() {
   // Compatibility aliases for the compact detail modal markup; both now mean a direct discount.
   const baseDiscount = currentAccountDiscount;
   const level1Extra = 0;
+  const canAccessDealerOrder = Boolean(user && isUsableDealerAccount(account));
+  const dealerProducts = canAccessDealerOrder ? products : [];
+  const dealerProductCategories = canAccessDealerOrder ? productCategories : [];
 
   useEffect(() => onAuthStateChanged(auth, async (currentUser) => {
     setUser(currentUser);
@@ -107,9 +116,12 @@ export default function DealerOrder() {
   }), []);
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!canAccessDealerOrder || !user?.uid) {
       setLoadedCartUid(null);
       setQuantities({});
+      setDetail(null);
+      setIsCheckoutOpen(false);
+      setIsMobileCartOpen(false);
       return;
     }
 
@@ -126,15 +138,15 @@ export default function DealerOrder() {
       localStorage.removeItem(`voltara_dealer_cart_${user.uid}`);
     }
     setLoadedCartUid(user.uid);
-  }, [user?.uid]);
+  }, [canAccessDealerOrder, user?.uid]);
 
   useEffect(() => {
-    if (!user?.uid || loadedCartUid !== user.uid) return;
+    if (!canAccessDealerOrder || !user?.uid || loadedCartUid !== user.uid) return;
     const storageKey = `voltara_dealer_cart_${user.uid}`;
     const activeQuantities = Object.fromEntries(Object.entries(quantities).filter(([, quantity]) => quantity > 0));
     if (Object.keys(activeQuantities).length) localStorage.setItem(storageKey, JSON.stringify(activeQuantities));
     else localStorage.removeItem(storageKey);
-  }, [quantities, user?.uid, loadedCartUid]);
+  }, [quantities, canAccessDealerOrder, user?.uid, loadedCartUid]);
 
   useEffect(() => {
     if (account) return;
@@ -183,22 +195,26 @@ export default function DealerOrder() {
     try {
       const normalizedPhone = normalizePhone(phone);
       if (!/^0\d{9}$/.test(normalizedPhone)) throw new Error('invalid-phone');
+      if (auth.currentUser) await signOut(auth);
+      setUser(null);
+      setAccount(null);
+      setQuantities({});
       await signInWithEmailAndPassword(auth, authEmailFromPhone(normalizedPhone), password);
     }
     catch { setLoginError('Số điện thoại hoặc mật khẩu không đúng.'); }
     finally { setLoginLoading(false); }
   };
 
-  const visibleProducts = useMemo(() => products.filter((product) => {
+  const visibleProducts = useMemo(() => dealerProducts.filter((product) => {
     if (product.hidden) return false;
     const matchesCategory = category === 'all' || product.category === category;
     const text = `${product.name} ${product.id} ${product.sku || ''}`.toLowerCase();
     return matchesCategory && text.includes(query.trim().toLowerCase());
-  }), [products, category, query]);
+  }), [dealerProducts, category, query]);
 
-  const cart = useMemo(() => products
+  const cart = useMemo(() => dealerProducts
     .filter((product) => (quantities[product.id] || 0) > 0)
-    .map((product) => ({ product, quantity: quantities[product.id], price: dealerPriceOf(product, dealerLevel, level1Discount, level2Discount) })), [products, quantities, dealerLevel, level1Discount, level2Discount]);
+    .map((product) => ({ product, quantity: quantities[product.id], price: dealerPriceOf(product, dealerLevel, level1Discount, level2Discount) })), [dealerProducts, quantities, dealerLevel, level1Discount, level2Discount]);
 
   const retailTotal = cart.reduce((sum, item) => sum + retailOf(item.product) * item.quantity, 0);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -269,6 +285,7 @@ export default function DealerOrder() {
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-[#080808] pt-20 text-sm uppercase tracking-widest text-[#f4b820]">Đang kiểm tra tài khoản...</div>;
   if (!user || !account) return <div className="flex min-h-screen items-center justify-center bg-[#080808] px-4 pt-20 text-white"><div className="w-full max-w-md border border-[#f4b820]/25 bg-[#111] shadow-2xl"><div className="border-b border-white/10 p-6"><div className="mb-4 flex h-12 w-12 items-center justify-center border border-[#f4b820]/30 bg-[#f4b820]/10"><Lock className="h-6 w-6 text-[#f4b820]" /></div><p className="text-[10px] font-bold uppercase tracking-[.24em] text-[#f4b820]">Cổng dành cho đại lý</p><h1 className="mt-2 font-display text-2xl font-black uppercase">Đăng nhập đặt hàng</h1><p className="mt-2 text-xs leading-5 text-gray-500">Hệ thống tự nhận diện cấp đại lý và hiển thị đúng bảng giá sau khi đăng nhập.</p></div>{user && !account ? <div className="p-6"><p className="border border-red-500/20 bg-red-500/10 p-4 text-xs leading-5 text-red-300">Tài khoản này chưa được Admin cấp quyền đại lý hoặc hồ sơ đã bị xóa.</p><button onClick={() => signOut(auth)} className="mt-4 w-full border border-white/10 py-3 text-xs font-bold uppercase">Đăng xuất</button></div> : <form onSubmit={handleLogin} className="space-y-4 p-6"><label className="block space-y-2 text-[10px] font-bold uppercase text-gray-400">Email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none focus:border-[#f4b820]" /></label><label className="block space-y-2 text-[10px] font-bold uppercase text-gray-400">Mật khẩu<input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-[#f4b820]" /></label>{loginError && <p className="border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">{loginError}</p>}<button disabled={loginLoading} className="flex w-full items-center justify-center gap-2 bg-[#f4b820] py-3 text-xs font-black uppercase text-black disabled:opacity-50"><LogIn className="h-4 w-4" />{loginLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button></form>}</div></div>;
   if (account.status === 'locked') return <div className="flex min-h-screen items-center justify-center bg-[#080808] px-4 pt-20"><div className="max-w-md border border-red-500/20 bg-[#111] p-8 text-center"><Lock className="mx-auto h-8 w-8 text-red-400" /><h1 className="mt-4 text-xl font-black uppercase">Tài khoản đã bị khóa</h1><p className="mt-2 text-xs text-gray-500">Vui lòng liên hệ Voltara để được hỗ trợ.</p><button onClick={() => signOut(auth)} className="mt-5 border border-white/10 px-5 py-3 text-xs uppercase">Đăng xuất</button></div></div>;
+  if (!canAccessDealerOrder) return <div className="flex min-h-screen items-center justify-center bg-[#080808] px-4 pt-20"><div className="max-w-md border border-red-500/20 bg-[#111] p-8 text-center"><Lock className="mx-auto h-8 w-8 text-red-400" /><h1 className="mt-4 text-xl font-black uppercase">Không có quyền đặt hàng</h1><p className="mt-2 text-xs text-gray-500">Tài khoản này chưa được cấp hồ sơ đại lý hợp lệ.</p><button onClick={() => signOut(auth)} className="mt-5 border border-white/10 px-5 py-3 text-xs uppercase">Đăng xuất</button></div></div>;
 
   return (
     <div className="min-h-screen bg-[#080808] pt-20 text-[#efefef]">
@@ -299,14 +316,14 @@ export default function DealerOrder() {
         </label>
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button onClick={() => selectCategory('all')} className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold uppercase ${category === 'all' ? 'border-[#f4b820] bg-[#f4b820] text-black' : 'border-white/10 text-gray-400'}`}>Tất cả</button>
-          {productCategories.filter((item) => !item.hidden).map((item) => <button key={item.id} onClick={() => selectCategory(item.id)} className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold ${category === item.id ? 'border-[#f4b820] bg-[#f4b820] text-black' : 'border-white/10 text-gray-400'}`}>{item.name}</button>)}
+          {dealerProductCategories.filter((item) => !item.hidden).map((item) => <button key={item.id} onClick={() => selectCategory(item.id)} className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold ${category === item.id ? 'border-[#f4b820] bg-[#f4b820] text-black' : 'border-white/10 text-gray-400'}`}>{item.name}</button>)}
         </div>
       </div>
 
       <div className="mx-auto grid max-w-[1600px] gap-2 p-2 lg:grid-cols-[210px_minmax(0,1fr)_330px] lg:gap-4 lg:p-4">
         <aside className="hidden h-fit border border-white/10 bg-[#0e0e0e] lg:sticky lg:top-40 lg:block">
           <button onClick={() => selectCategory('all')} className={`w-full px-4 py-3 text-left text-xs font-black uppercase ${category === 'all' ? 'bg-[#f4b820] text-black' : ''}`}>Tất cả sản phẩm</button>
-          {productCategories.filter((item) => !item.hidden).map((item) => (
+          {dealerProductCategories.filter((item) => !item.hidden).map((item) => (
             <button key={item.id} onClick={() => selectCategory(item.id)} className={`w-full border-t border-white/5 px-4 py-3 text-left text-xs transition hover:text-[#f4b820] ${category === item.id ? 'text-[#f4b820]' : 'text-gray-300'}`}>{item.name}</button>
           ))}
           <Link href="/dai-ly" className="flex items-center justify-between border-t border-white/10 px-4 py-4 text-[10px] font-bold uppercase text-gray-500 hover:text-white">Hệ thống đại lý <ChevronRight className="h-4 w-4" /></Link>
@@ -315,9 +332,9 @@ export default function DealerOrder() {
         <main id="dealer-products-start" className="min-h-[65vh] min-w-0 scroll-mt-40">
           <div className="mb-3 hidden flex-col gap-2 lg:flex lg:flex-row">
             <label className="flex flex-1 items-center gap-2 border border-white/10 bg-[#111] px-4 py-3"><Search className="h-4 w-4 text-gray-500" /><input value={query} onChange={(e) => updateQuery(e.target.value)} placeholder="Tìm tên, mã SKU hoặc mã sản phẩm..." className="w-full bg-transparent text-base outline-none lg:text-sm" /></label>
-            <div className="flex min-w-[290px] items-center gap-2 border border-white/10 bg-[#111] px-3 py-2 text-xs"><b className="whitespace-nowrap text-[#f4b820]">NHẬP NHANH</b><input placeholder="Mã sản phẩm" className="min-w-0 flex-1 bg-black px-3 py-2 outline-none" onKeyDown={(e) => { if (e.key === 'Enter') { const found = products.find((p) => [p.id, p.sku].some((v) => v?.toLowerCase() === e.currentTarget.value.toLowerCase())); if (found) { setQuantity(found.id, (quantities[found.id] || 0) + 1); e.currentTarget.value = ''; } else showToast('Không tìm thấy mã sản phẩm', 'warning'); } }} /></div>
+            <div className="flex min-w-[290px] items-center gap-2 border border-white/10 bg-[#111] px-3 py-2 text-xs"><b className="whitespace-nowrap text-[#f4b820]">NHẬP NHANH</b><input placeholder="Mã sản phẩm" className="min-w-0 flex-1 bg-black px-3 py-2 outline-none" onKeyDown={(e) => { if (e.key === 'Enter') { const found = dealerProducts.find((p) => [p.id, p.sku].some((v) => v?.toLowerCase() === e.currentTarget.value.toLowerCase())); if (found) { setQuantity(found.id, (quantities[found.id] || 0) + 1); e.currentTarget.value = ''; } else showToast('Không tìm thấy mã sản phẩm', 'warning'); } }} /></div>
           </div>
-          <div className="mb-2 flex items-center justify-between px-1 lg:mb-3 lg:px-0"><h2 className="font-display text-xs font-black uppercase lg:text-sm">{category === 'all' ? 'Tất cả sản phẩm' : productCategories.find((item) => item.id === category)?.name}</h2><span className="text-[10px] text-gray-500 lg:text-xs">{visibleProducts.length} sản phẩm</span></div>
+          <div className="mb-2 flex items-center justify-between px-1 lg:mb-3 lg:px-0"><h2 className="font-display text-xs font-black uppercase lg:text-sm">{category === 'all' ? 'Tất cả sản phẩm' : dealerProductCategories.find((item) => item.id === category)?.name}</h2><span className="text-[10px] text-gray-500 lg:text-xs">{visibleProducts.length} sản phẩm</span></div>
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {visibleProducts.length === 0 && <div className="col-span-full flex min-h-64 flex-col items-center justify-center border border-white/10 bg-[#0d0d0d] px-5 text-center"><Search className="mb-3 h-8 w-8 text-gray-700" /><b className="text-sm uppercase text-gray-300">Không tìm thấy sản phẩm</b><p className="mt-2 text-xs text-gray-500">Kiểm tra lại tên, SKU hoặc mã sản phẩm.</p>{query && <button type="button" onClick={() => updateQuery('')} className="mt-4 border border-[#f4b820]/30 px-4 py-2 text-[10px] font-bold uppercase text-[#f4b820]">Xóa từ khóa</button>}</div>}
             {visibleProducts.map((product) => {
