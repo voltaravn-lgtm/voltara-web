@@ -274,12 +274,27 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* Mobile Menu Icon */}
-          <div id="mobile-menu-trigger" className="flex lg:hidden items-center gap-3">
+          {/* Mobile Header Actions */}
+          <div id="mobile-menu-trigger" className="flex lg:hidden items-center gap-1 sm:gap-2">
+            <button
+              id="search-mobile-btn"
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsSearchOpen(true);
+              }}
+              className="rounded-full border border-gold-dark/50 bg-gold-dark/10 p-2 text-gold-light shadow-[0_0_12px_rgba(216,154,43,0.12)] transition-colors hover:bg-gold-dark/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-light"
+              title="Tìm kiếm sản phẩm"
+              aria-label="Tìm kiếm sản phẩm"
+            >
+              <Search className="h-5 w-5" />
+            </button>
             <button
               id="cart-mobile-btn"
+              type="button"
               onClick={handleCartClick}
               className="relative p-2 text-gray-400 hover:text-gold-light transition-colors"
+              aria-label="Mở giỏ hàng"
             >
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
@@ -290,8 +305,12 @@ export default function Header() {
             </button>
             <button
               id="mobile-nav-toggle"
+              type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 rounded-md text-gray-400 hover:text-white focus:outline-none"
+              aria-label={isMobileMenuOpen ? "Đóng menu" : "Mở menu"}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-drawer"
             >
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
