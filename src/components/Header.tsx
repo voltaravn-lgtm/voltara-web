@@ -15,6 +15,15 @@ function getCategoryHref(categoryId: string, subCategoryId?: string) {
   return `/san-pham/danh-muc/${encodeURIComponent(categoryId)}${query}`;
 }
 
+function formatSearchPrice(price: string | undefined) {
+  const raw = (price || "").trim();
+  if (!raw) return "";
+
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits || !/^[\d\s.,]+(?:đ|₫|vnd)?$/i.test(raw)) return raw;
+  return `${Number(digits).toLocaleString("vi-VN")}đ`;
+}
+
 export const VoltaraLogo: React.FC<{ className?: string; iconOnly?: boolean }> = ({ className = "h-8", iconOnly = false }) => {
   const [useImgFallback, setUseImgFallback] = useState(false);
 
@@ -127,15 +136,21 @@ export default function Header() {
           .filter(product =>
             !product.hidden &&
             (product.name.toLowerCase().includes(normalizedSearch) ||
+              product.id.toLowerCase().includes(normalizedSearch) ||
+              (product.sku || "").toLowerCase().includes(normalizedSearch) ||
               product.description.toLowerCase().includes(normalizedSearch) ||
-              product.category.toLowerCase().includes(normalizedSearch))
+              product.category.toLowerCase().includes(normalizedSearch) ||
+              product.voltage.toLowerCase().includes(normalizedSearch) ||
+              product.capacity.toLowerCase().includes(normalizedSearch))
           )
           .slice(0, 5)
           .map(product => ({
             type: "Sản phẩm",
             title: product.name,
-            subtitle: product.category,
+            subtitle: `${product.sku || product.id} · ${product.category}`,
             href: getProductHref(product),
+            image: product.image,
+            price: formatSearchPrice(product.salePrice || product.price || product.retailPrice),
           })),
         ...articles
           .filter(article =>
@@ -149,6 +164,8 @@ export default function Header() {
             title: article.title,
             subtitle: article.category,
             href: `/kien-thuc?postId=${encodeURIComponent(article.id)}`,
+            image: article.image,
+            price: "",
           })),
       ].slice(0, 8)
     : [];
@@ -393,8 +410,8 @@ export default function Header() {
         />
       )}
       {isSearchOpen && (
-        <div className="fixed inset-0 z-[75] bg-black/85 backdrop-blur-sm p-4" onClick={() => setIsSearchOpen(false)}>
-          <div className="mx-auto mt-24 w-full max-w-2xl border border-gold-dark/30 bg-[#0A0A0A] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-[75] bg-black/85 p-3 backdrop-blur-sm sm:p-4" onClick={() => setIsSearchOpen(false)}>
+          <div className="mx-auto mt-12 w-full max-w-2xl border border-gold-dark/30 bg-[#0A0A0A] p-3 shadow-2xl sm:mt-24 sm:p-4" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center gap-3 border border-white/10 bg-black px-4 py-3">
               <Search className="h-5 w-5 text-gold-light" />
               <input
@@ -410,13 +427,13 @@ export default function Header() {
               </button>
             </div>
 
-            <div className="mt-4 max-h-[55vh] overflow-y-auto">
+            <div className="mt-3 max-h-[65vh] overflow-y-auto sm:mt-4 sm:max-h-[55vh]">
               {!normalizedSearch ? (
                 <p className="px-2 py-8 text-center text-xs font-display font-bold uppercase tracking-widest text-gray-600">Nhập từ khóa để tìm kiếm</p>
               ) : searchResults.length === 0 ? (
                 <p className="px-2 py-8 text-center text-xs font-display font-bold uppercase tracking-widest text-gray-600">Không tìm thấy kết quả</p>
               ) : (
-                <div className="space-y-2">
+                <div className="divide-y divide-white/10 border border-white/10">
                   {searchResults.map((result) => (
                     <Link
                       key={`${result.type}-${result.href}`}
@@ -425,11 +442,32 @@ export default function Header() {
                         setIsSearchOpen(false);
                         setSearchQuery("");
                       }}
-                      className="block border border-white/10 bg-[#111] px-4 py-3 hover:border-gold-dark/50 hover:bg-[#151515]"
+                      className="group flex min-h-[76px] items-center gap-3 bg-[#111] p-2.5 transition-colors hover:bg-[#181818] focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-gold-light sm:min-h-[88px] sm:gap-4 sm:p-3"
                     >
-                      <div className="text-[9px] font-display font-bold uppercase tracking-widest text-gold-light">{result.type}</div>
-                      <div className="mt-1 line-clamp-1 text-xs font-display font-bold uppercase text-white">{result.title}</div>
-                      <div className="mt-1 text-[10px] text-gray-500">{result.subtitle}</div>
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden bg-white sm:h-16 sm:w-16">
+                        {result.image ? (
+                          <img
+                            src={result.image}
+                            alt=""
+                            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <Search className="h-5 w-5 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[8px] font-display font-bold uppercase tracking-widest text-gold-light sm:text-[9px]">{result.type}</div>
+                        <div className="mt-1 line-clamp-2 text-[11px] font-display font-bold uppercase leading-4 text-white sm:text-xs">{result.title}</div>
+                        <div className="mt-1 truncate font-mono text-[9px] text-gray-500 sm:text-[10px]">{result.subtitle}</div>
+                        {result.price && <div className="mt-1 text-[10px] font-display font-bold text-gold-light sm:hidden">{result.price}</div>}
+                      </div>
+                      {result.price && (
+                        <div className="hidden shrink-0 text-right text-xs font-display font-bold text-gold-light sm:block">
+                          {result.price}
+                        </div>
+                      )}
                     </Link>
                   ))}
                 </div>
