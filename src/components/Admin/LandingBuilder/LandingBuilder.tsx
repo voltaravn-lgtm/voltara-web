@@ -7,6 +7,7 @@ import { createDefaultLandingBlock, createLandingEntityId } from '../../../lib/l
 import { getLandingPageById, isLandingSlugAvailable, saveLandingPage } from '../../../lib/landing/landingPageRepository';
 import { validateLandingPage, validateLandingPageForPublish } from '../../../lib/landing/landingValidation';
 import { revalidateLandingCache } from '../../../lib/landing/landingCacheClient';
+import { materializeLandingTemplateDefaults } from '../../../lib/landing/landingTemplates';
 import { useApp } from '../../../context/AppContext';
 import VisualBuilderTopbar from './VisualBuilderTopbar';
 import VisualBuilderSidebar from './VisualBuilderSidebar';
@@ -56,9 +57,10 @@ export default function LandingBuilder({ pageId, onBack }: { pageId: string; onB
     getLandingPageById(pageId).then((result) => {
       if (cancelled) return;
       if (!result) throw new Error('Landing Page không tồn tại.');
-      const draft = clonePage(result);
+      const source = clonePage(result);
+      const draft = materializeLandingTemplateDefaults(source);
       setPage(draft);
-      setSavedSnapshot(JSON.stringify(draft));
+      setSavedSnapshot(JSON.stringify(source));
       setSelectedBlockId(draft.blocks[0]?.id || null);
       setHistoryPast([]);
       setHistoryFuture([]);
@@ -133,7 +135,11 @@ export default function LandingBuilder({ pageId, onBack }: { pageId: string; onB
   const addBlock = (type: LandingBlockType) => {
     if (!page) return;
     const block = createDefaultLandingBlock(type);
-    const nextPage = { ...page, blocks: [...page.blocks, block] };
+    const selectedIndex = selectedBlockId ? page.blocks.findIndex((item) => item.id === selectedBlockId) : -1;
+    const insertAt = selectedIndex >= 0 ? selectedIndex + 1 : page.blocks.length;
+    const nextBlocks = [...page.blocks];
+    nextBlocks.splice(insertAt, 0, block);
+    const nextPage = { ...page, blocks: nextBlocks };
     commitPage(nextPage, block.id, true);
     setSidebarTab('layers');
     setMobilePanel('inspector');

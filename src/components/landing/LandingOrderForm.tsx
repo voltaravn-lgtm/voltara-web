@@ -18,7 +18,7 @@ export default function LandingOrderForm({ block, page, products, editorMode }: 
   const emptyFields = { customerName: '', phone: '', address: '', province: '', district: '', ward: '', note: '', businessName: '', businessType: '', estimatedVolume: '', website: '' };
   const [items, setItems] = useState(initialItems); const [fields, setFields] = useState(emptyFields);
   const [requestId, setRequestId] = useState(newRequestId); const [submitting, setSubmitting] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState<{ orderCode: string; total: number; currency: string; items: FormItem[] } | null>(null);
-  const inputClass = 'w-full border border-current/15 bg-transparent px-4 py-3 text-base outline-none focus:border-[var(--landing-primary)] md:text-sm';
+  const inputClass = 'landing-field w-full border border-current/15 px-4 py-3 text-base outline-none focus:border-[var(--landing-primary)] md:text-sm';
   const reset = () => { setFields(emptyFields); setItems(initialItems); setRequestId(newRequestId()); setError(''); setSuccess(null); };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (editorMode || submitting) return; setSubmitting(true); setError('');

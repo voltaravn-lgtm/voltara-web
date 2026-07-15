@@ -410,7 +410,6 @@ export default function About() {
               <span className="text-xs font-display font-extrabold tracking-widest text-gold-light uppercase leading-none">
                 {aboutContent.quoteAuthor || "HỘI ĐỒNG SÁNG LẬP VOLTARA TECHNOLOGY"}
               </span>
-              <span className="text-[9px] text-gray-500 font-mono mt-1">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</span>
             </div>
           </div>
         </div>

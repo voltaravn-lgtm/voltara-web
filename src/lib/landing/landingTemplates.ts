@@ -2,6 +2,7 @@ import { Product } from "../../types";
 import {
   LandingBlock,
   LandingBlockType,
+  LandingPage,
   LandingPageLayout,
   LandingProductOverrides,
 } from "../../types/landing";
@@ -22,7 +23,12 @@ const salesLayout: LandingPageLayout = {
   hideHeader: true,
   hideFooter: true,
   stickyMobileCta: true,
-  theme: "dark",
+  theme: "light",
+};
+
+const dealerLayout: LandingPageLayout = {
+  ...salesLayout,
+  theme: "light",
 };
 
 export const LANDING_TEMPLATES: LandingTemplateDefinition[] = [
@@ -32,7 +38,7 @@ export const LANDING_TEMPLATES: LandingTemplateDefinition[] = [
     name: "Tuyển đại lý phân phối",
     description: "Landing B2B thu lead đại lý với quyền lợi, chính sách hợp tác, bằng chứng và form sàng lọc.",
     blockTypes: ["hero", "benefits", "features", "reviews", "faq", "order-form", "contact-button"],
-    layout: salesLayout,
+    layout: dealerLayout,
     productRequired: false,
   },
   {
@@ -100,7 +106,7 @@ export function createBlocksFromTemplate(template: LandingTemplateDefinition, pr
     const block = createDefaultLandingBlock(type);
     if (template.templateId === "dealer-recruitment") {
       switch (block.type) {
-        case "hero": return { ...block, eyebrow: "CƠ HỘI HỢP TÁC CÙNG VOLTARA", title: "Trở thành đại lý phân phối Voltara tại khu vực của bạn", description: "Sản phẩm có định vị rõ ràng, chính sách đồng hành thực tế và hỗ trợ bán hàng từ thương hiệu.", ctaLabel: "Nhận chính sách đại lý", ctaTarget: "#dat-hang" };
+        case "hero": return { ...block, layout: "overlay", eyebrow: "CƠ HỘI HỢP TÁC CÙNG VOLTARA", title: "Trở thành đại lý phân phối Voltara tại khu vực của bạn", description: "Mở rộng danh mục sản phẩm năng lượng và thiết bị công cụ với chính sách hợp tác rõ ràng, hỗ trợ bán hàng và đồng hành phát triển thị trường.", backgroundImage: "/images/dai-ly.webp", ctaLabel: "Nhận chính sách đại lý", ctaTarget: "#dat-hang", style: { ...block.style, textColor: "#ffffff", paddingTop: 0, paddingBottom: 0 } };
         case "benefits": return { ...block, title: "Quyền lợi dành cho đại lý", items: [
           { id: "dealer-benefit-margin", title: "Chính sách giá cạnh tranh", description: "Chiết khấu theo cấp độ và sản lượng kinh doanh." },
           { id: "dealer-benefit-area", title: "Hỗ trợ theo khu vực", description: "Cùng xây dựng thị trường và hạn chế cạnh tranh nội bộ." },
@@ -111,7 +117,11 @@ export function createBlocksFromTemplate(template: LandingTemplateDefinition, pr
           { id: "dealer-step-2", title: "2. Tư vấn", description: "Đội ngũ Voltara trao đổi nhu cầu và chính sách phù hợp." },
           { id: "dealer-step-3", title: "3. Kích hoạt", description: "Thống nhất kế hoạch nhập hàng và bắt đầu triển khai." },
         ] };
-        case "reviews": return { ...block, title: "Đối tác nói gì về Voltara", items: [] };
+        case "reviews": return { ...block, title: "Đối tác nói gì về Voltara", items: [
+          { id: "dealer-review-sample-1", name: "Đại lý ngành công cụ · Nội dung mẫu", content: "Chính sách hợp tác rõ ràng, đội ngũ hỗ trợ phản hồi nhanh và tài liệu sản phẩm dễ triển khai cho khách hàng.", rating: 5 },
+          { id: "dealer-review-sample-2", name: "Cửa hàng thiết bị · Nội dung mẫu", content: "Danh mục sản phẩm có định hướng rõ, phù hợp để mở rộng nhóm khách hàng cần giải pháp pin và lưu trữ năng lượng.", rating: 5 },
+          { id: "dealer-review-sample-3", name: "Đối tác phân phối · Nội dung mẫu", content: "Quy trình tư vấn minh bạch giúp chúng tôi dễ lựa chọn phương án nhập hàng theo quy mô kinh doanh.", rating: 5 },
+        ] };
         case "faq": return { ...block, title: "Câu hỏi thường gặp", items: [
           { id: "dealer-faq-capital", question: "Cần vốn ban đầu bao nhiêu?", answer: "Mức nhập hàng phụ thuộc khu vực, mô hình kinh doanh và nhóm sản phẩm. Voltara sẽ tư vấn phương án phù hợp sau khi nhận đăng ký." },
           { id: "dealer-faq-support", question: "Đại lý được hỗ trợ những gì?", answer: "Chính sách cụ thể có thể gồm tài liệu bán hàng, nội dung truyền thông, đào tạo sản phẩm và hỗ trợ triển khai theo từng chương trình." },
@@ -127,6 +137,17 @@ export function createBlocksFromTemplate(template: LandingTemplateDefinition, pr
       case "price": return { ...block, productId: product?.id };
       case "combo": return { ...block, products: product ? [{ productId: product.id }] : [] };
       case "gift": return { ...block, productId: product?.id };
+      case "reviews": return product ? { ...block, items: [
+        { id: "product-review-sample-1", name: "Khách hàng đã mua · Nội dung mẫu", content: `${product.name} có thông tin rõ ràng, đóng gói cẩn thận và đội ngũ tư vấn hỗ trợ nhanh.`, rating: 5 },
+        { id: "product-review-sample-2", name: "Khách hàng sử dụng · Nội dung mẫu", content: "Sản phẩm dễ sử dụng, hoàn thiện chắc chắn và đáp ứng tốt nhu cầu công việc thực tế.", rating: 5 },
+        { id: "product-review-sample-3", name: "Khách hàng Voltara · Nội dung mẫu", content: "Tôi hài lòng với quá trình tư vấn, hướng dẫn sử dụng và chính sách hỗ trợ sau mua.", rating: 5 },
+      ] } : block;
+      case "faq": return product ? { ...block, items: [
+        { id: "product-faq-fit", question: `${product.name} phù hợp với nhu cầu nào?`, answer: "Bạn nên đối chiếu mục đích sử dụng với thông số kỹ thuật trên trang. Nếu chưa chắc chắn, hãy để lại số điện thoại để đội ngũ Voltara tư vấn cấu hình phù hợp." },
+        { id: "product-faq-warranty", question: "Sản phẩm được bảo hành như thế nào?", answer: "Thời hạn và điều kiện bảo hành áp dụng theo chính sách được công bố cho từng sản phẩm. Voltara sẽ xác nhận đầy đủ khi tư vấn hoặc xác nhận đơn hàng." },
+        { id: "product-faq-order", question: "Tôi có được tư vấn trước khi đặt hàng không?", answer: "Có. Bạn có thể gửi form hoặc liên hệ kênh hỗ trợ trên trang để được tư vấn về thông số, khả năng tương thích và nhu cầu sử dụng." },
+        { id: "product-faq-delivery", question: "Thời gian giao hàng dự kiến bao lâu?", answer: "Thời gian giao hàng phụ thuộc khu vực và tình trạng sản phẩm. Đội ngũ Voltara sẽ thông báo thời gian dự kiến khi xác nhận đơn." },
+      ] } : block;
       case "order-form": return { ...block, productIds: product ? [product.id] : [] };
       case "contact-button": return template.templateId === "shopee-redirect"
         ? { ...block, channel: "shopee", label: "Mua trên Shopee" }
@@ -157,4 +178,44 @@ export function createStandaloneLandingTemplateData(template: LandingTemplateDef
     layout: { ...template.layout },
     blocks: createBlocksFromTemplate(template),
   };
+}
+
+export function materializeLandingTemplateDefaults(page: LandingPage): LandingPage {
+  const productName = page.productOverrides?.title || page.seo.title || page.name.replace(/^Landing\s*-\s*/i, '') || 'Sản phẩm Voltara';
+  let changed = false;
+  const blocks = page.blocks.map((block): LandingBlock => {
+    if (block.type === 'hero' && page.templateId === 'dealer-recruitment' && !block.image && !block.backgroundImage) {
+      changed = true;
+      return { ...block, layout: 'overlay', backgroundImage: '/images/dai-ly.webp', style: { ...block.style, textColor: '#ffffff', paddingTop: 0, paddingBottom: 0 } };
+    }
+    if (block.type === 'reviews' && !block.items.length) {
+      if (page.templateId === 'dealer-recruitment') {
+        changed = true;
+        return { ...block, items: [
+          { id: 'dealer-review-editable-1', name: 'Đại lý ngành công cụ · Nội dung mẫu', content: 'Chính sách hợp tác rõ ràng, đội ngũ hỗ trợ phản hồi nhanh và tài liệu sản phẩm dễ triển khai cho khách hàng.', rating: 5 },
+          { id: 'dealer-review-editable-2', name: 'Cửa hàng thiết bị · Nội dung mẫu', content: 'Danh mục sản phẩm có định hướng rõ, phù hợp để mở rộng nhóm khách hàng cần giải pháp pin và lưu trữ năng lượng.', rating: 5 },
+          { id: 'dealer-review-editable-3', name: 'Đối tác phân phối · Nội dung mẫu', content: 'Quy trình tư vấn minh bạch giúp chúng tôi dễ lựa chọn phương án nhập hàng theo quy mô kinh doanh.', rating: 5 },
+        ] };
+      }
+      if (page.primaryProductId) {
+        changed = true;
+        return { ...block, items: [
+          { id: 'product-review-editable-1', name: 'Khách hàng đã mua · Nội dung mẫu', content: `${productName} có thông tin rõ ràng, đóng gói cẩn thận và đội ngũ tư vấn hỗ trợ nhanh.`, rating: 5 },
+          { id: 'product-review-editable-2', name: 'Khách hàng sử dụng · Nội dung mẫu', content: 'Sản phẩm dễ sử dụng, hoàn thiện chắc chắn và đáp ứng tốt nhu cầu công việc thực tế.', rating: 5 },
+          { id: 'product-review-editable-3', name: 'Khách hàng Voltara · Nội dung mẫu', content: 'Tôi hài lòng với quá trình tư vấn, hướng dẫn sử dụng và chính sách hỗ trợ sau mua.', rating: 5 },
+        ] };
+      }
+    }
+    if (block.type === 'faq' && !block.items.length && page.primaryProductId) {
+      changed = true;
+      return { ...block, items: [
+        { id: 'product-faq-editable-fit', question: `${productName} phù hợp với nhu cầu nào?`, answer: 'Bạn nên đối chiếu mục đích sử dụng với thông số kỹ thuật trên trang. Nếu chưa chắc chắn, hãy để lại số điện thoại để đội ngũ Voltara tư vấn cấu hình phù hợp.' },
+        { id: 'product-faq-editable-warranty', question: 'Sản phẩm được bảo hành như thế nào?', answer: 'Thời hạn và điều kiện bảo hành áp dụng theo chính sách được công bố cho từng sản phẩm. Voltara sẽ xác nhận đầy đủ khi tư vấn hoặc xác nhận đơn hàng.' },
+        { id: 'product-faq-editable-order', question: 'Tôi có được tư vấn trước khi đặt hàng không?', answer: 'Có. Bạn có thể gửi form hoặc liên hệ kênh hỗ trợ trên trang để được tư vấn về thông số, khả năng tương thích và nhu cầu sử dụng.' },
+        { id: 'product-faq-editable-delivery', question: 'Thời gian giao hàng dự kiến bao lâu?', answer: 'Thời gian giao hàng phụ thuộc khu vực và tình trạng sản phẩm. Đội ngũ Voltara sẽ thông báo thời gian dự kiến khi xác nhận đơn.' },
+      ] };
+    }
+    return block;
+  });
+  return changed ? { ...page, blocks } : page;
 }

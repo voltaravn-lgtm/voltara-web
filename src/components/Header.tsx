@@ -222,7 +222,7 @@ export default function Header() {
                   </Link>
 
                   {item.path === "/san-pham" && visibleProductCategories.length > 0 && (
-                    <div className="invisible absolute left-0 top-full z-50 min-w-[260px] translate-y-3 border border-gold-dark/25 bg-[#070707]/98 p-2 opacity-0 shadow-2xl shadow-black/50 backdrop-blur-md transition-all duration-200 group-hover/nav:visible group-hover/nav:translate-y-0 group-hover/nav:opacity-100">
+                    <div className="invisible absolute left-0 top-full z-50 min-w-[260px] translate-y-3 rounded-lg border border-gold-dark/30 bg-[#070707]/98 p-2.5 opacity-0 shadow-[0_18px_50px_rgba(0,0,0,0.72),0_0_24px_rgba(216,154,43,0.08)] backdrop-blur-md transition-all duration-200 group-hover/nav:visible group-hover/nav:translate-y-0 group-hover/nav:opacity-100">
                       {visibleProductCategories.map((category) => {
                         const children = (category.children || []).filter((child) => !child.hidden);
                         const categoryHref = getCategoryHref(category.id);
@@ -230,18 +230,18 @@ export default function Header() {
                           <div key={category.id} className="group/category relative">
                             <Link
                               to={categoryHref}
-                              className="flex items-center justify-between gap-3 px-3 py-2.5 text-[11px] font-display font-bold uppercase tracking-wider text-gray-300 transition-colors hover:bg-gold-dark/10 hover:text-gold-light"
+                              className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3.5 py-2.5 text-[11px] font-display font-bold uppercase tracking-wider text-gray-300 transition-all duration-150 hover:bg-gold-dark/15 hover:text-gold-light focus-visible:bg-gold-dark/15 focus-visible:text-gold-light focus-visible:outline-none"
                             >
                               <span>{category.name}</span>
-                              {children.length > 0 && <ChevronRight className="h-3.5 w-3.5 text-gray-500" />}
+                              {children.length > 0 && <ChevronRight className="h-3.5 w-3.5 text-gray-500 transition-colors group-hover/category:text-gold-light" />}
                             </Link>
                             {children.length > 0 && (
-                              <div className="invisible absolute left-full top-0 min-w-[240px] border border-gold-dark/25 bg-[#070707]/98 p-2 opacity-0 shadow-2xl shadow-black/50 transition-all group-hover/category:visible group-hover/category:opacity-100">
+                              <div className="invisible absolute left-full top-0 min-w-[240px] rounded-lg border border-gold-dark/30 bg-[#070707]/98 p-2.5 opacity-0 shadow-[0_18px_50px_rgba(0,0,0,0.72),0_0_24px_rgba(216,154,43,0.08)] transition-all group-hover/category:visible group-hover/category:opacity-100">
                                 {children.map((child) => (
                                   <Link
                                     key={child.id}
                                     to={getCategoryHref(category.id, child.id)}
-                                    className="block px-3 py-2.5 text-[11px] font-display font-bold uppercase tracking-wider text-gray-400 transition-colors hover:bg-gold-dark/10 hover:text-gold-light"
+                                    className="flex min-h-10 items-center rounded-md px-3.5 py-2.5 text-[11px] font-display font-bold uppercase tracking-wider text-gray-400 transition-all duration-150 hover:bg-gold-dark/15 hover:text-gold-light focus-visible:bg-gold-dark/15 focus-visible:text-gold-light focus-visible:outline-none"
                                   >
                                     {child.name}
                                   </Link>

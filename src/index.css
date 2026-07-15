@@ -194,6 +194,33 @@ body.day-mode .fixed * {
   overflow-x: auto;
 }
 
+/* Product details: soften the technical card system without losing its shape. */
+.product-detail-page {
+  --product-detail-radius: 10px;
+  --product-detail-inner-radius: 8px;
+}
+
+.product-detail-page :where(div, section, article, aside, button, a)[class*="border"],
+.product-detail-page :where(button, a, span)[class*="bg-gold"],
+.product-detail-page :where(button, a)[class*="bg-gradient"] {
+  border-radius: var(--product-detail-radius);
+}
+
+.product-detail-page :where(div, button, a)[class*="aspect-"] {
+  overflow: hidden;
+  border-radius: var(--product-detail-inner-radius);
+}
+
+.product-detail-page :where(img, video, iframe),
+.product-detail-page .product-description-content :where(img, table) {
+  border-radius: var(--product-detail-inner-radius);
+}
+
+.product-detail-page :where(div, section, article, aside)[class*="overflow-hidden"],
+.product-detail-page .product-description-content table {
+  overflow: hidden;
+}
+
 .product-description-content img {
   display: block;
   width: 100%;
@@ -327,12 +354,26 @@ body.day-mode .product-description-content tr:first-child td {
   padding-top: var(--landing-section-space);
   padding-bottom: var(--landing-section-space);
 }
+@media (max-width: 767px) {
+  .landing-root .landing-section {
+    padding-top: 24px !important;
+    padding-bottom: 24px !important;
+  }
+  .landing-root .landing-section-banner {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+}
+.landing-root[data-template="dealer-recruitment"] main > div:nth-child(even) .landing-section {
+  background: #fff7e6;
+}
 .landing-root .landing-section > div,
 .landing-root .landing-section > form {
   max-width: var(--landing-container) !important;
 }
 .landing-root h1, .landing-root h2, .landing-root h3, .landing-root h4, .landing-root h5, .landing-root h6 {
   font-family: var(--landing-heading-font);
+  font-variant-ligatures: none;
 }
 .landing-root .text-gold-light { color: var(--landing-accent) !important; }
 .landing-root .bg-gold-light { background-color: var(--landing-primary) !important; }
@@ -342,6 +383,21 @@ body.day-mode .product-description-content tr:first-child td {
 .landing-root .landing-section video,
 .landing-root .landing-section iframe { border-radius: var(--landing-radius); }
 .landing-root .landing-section [class*="shadow"] { box-shadow: var(--landing-shadow); }
+.landing-root form#dat-hang {
+  background: var(--landing-surface);
+  border-color: color-mix(in srgb, var(--landing-text) 16%, transparent);
+  box-shadow: var(--landing-shadow);
+}
+.landing-root .landing-field {
+  background: var(--landing-bg);
+  color: var(--landing-text);
+}
+.landing-root .landing-field::placeholder { color: var(--landing-muted); opacity: 1; }
+.landing-root select.landing-field { color-scheme: light; }
+.landing-root select.landing-field option {
+  background: #ffffff;
+  color: #151515;
+}
 .landing-root .landing-button,
 .landing-root button.bg-gold-light,
 .landing-root a.bg-gold-light {
@@ -350,6 +406,11 @@ body.day-mode .product-description-content tr:first-child td {
   background: var(--landing-primary);
   color: #090909;
   box-shadow: var(--landing-shadow);
+  font-family: Inter, "Segoe UI", Arial, Helvetica, sans-serif;
+  font-weight: 800;
+  font-variant-ligatures: none;
+  letter-spacing: .035em;
+  line-height: 1.25;
 }
 .landing-root[data-button-style="outline"] .landing-button,
 .landing-root[data-button-style="outline"] button.bg-gold-light,

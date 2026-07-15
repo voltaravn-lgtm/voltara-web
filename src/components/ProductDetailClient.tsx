@@ -172,7 +172,7 @@ export default function ProductDetailClient({ product, relatedProducts }: Produc
   };
 
   return (
-    <div className="bg-[#050505] pb-20">
+    <div className="product-detail-page bg-[#050505] pb-20">
       <section className="relative overflow-hidden bg-black pt-28 pb-12 lg:pt-36 lg:pb-16">
         <div className="absolute inset-0 pointer-events-none">
           <img

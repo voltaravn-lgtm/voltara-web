@@ -39,21 +39,28 @@ function plainText(value?: string) {
   return (value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function wrapperStyle(block: LandingBlock): React.CSSProperties {
+function wrapperStyle(block: LandingBlock, mode?: LandingPreviewMode): React.CSSProperties {
+  const mobilePadding = block.type === 'banner' ? 12 : 24;
+  const paddingTop = mode === 'mobile'
+    ? Math.min(block.style?.paddingTop ?? mobilePadding, mobilePadding)
+    : block.style?.paddingTop;
+  const paddingBottom = mode === 'mobile'
+    ? Math.min(block.style?.paddingBottom ?? mobilePadding, mobilePadding)
+    : block.style?.paddingBottom;
   return {
     backgroundColor: block.style?.backgroundColor,
     color: block.style?.textColor,
     textAlign: block.style?.alignment,
-    paddingTop: block.style?.paddingTop,
-    paddingBottom: block.style?.paddingBottom,
+    paddingTop,
+    paddingBottom,
   };
 }
 
-function Frame({ block, editorMode, selected, onSelect, children, className = '' }: BlockRendererProps & { children: React.ReactNode; className?: string }) {
+function Frame({ block, mode, editorMode, selected, onSelect, children, className = '' }: BlockRendererProps & { children: React.ReactNode; className?: string }) {
   return <section
     onClick={editorMode ? (event) => { event.stopPropagation(); onSelect?.(); } : undefined}
-    style={wrapperStyle(block)}
-    className={`landing-section landing-animate-${block.animation || 'none'} relative px-5 ${editorMode ? 'cursor-pointer transition ' + (selected ? 'ring-2 ring-inset ring-gold-light' : 'ring-1 ring-inset ring-white/5') : ''} ${className}`}
+    style={wrapperStyle(block, mode)}
+    className={`landing-section landing-section-${block.type} landing-animate-${block.animation || 'none'} relative px-5 ${editorMode ? 'cursor-pointer transition ' + (selected ? 'ring-2 ring-inset ring-gold-light' : 'ring-1 ring-inset ring-white/5') : ''} ${className}`}
   >
     {editorMode && selected && <span className="absolute left-2 top-2 z-10 bg-gold-light px-2 py-1 text-[8px] font-black uppercase text-black">Đang chọn</span>}
     {children}
@@ -68,16 +75,18 @@ function responsiveGrid(mode: LandingPreviewMode | undefined, desktopClass: stri
 
 export function HeroBlockRenderer(props: BlockRendererProps) {
   const block = props.block as HeroLandingBlock;
+  const dealerFallback = props.page.templateId === 'dealer-recruitment' && !block.image && !block.backgroundImage;
   const title = block.title || props.page.productOverrides?.title || props.product?.name || 'Sản phẩm Voltara';
   const description = block.description || props.page.productOverrides?.description || plainText(props.product?.description) || 'Giải pháp chính hãng dành cho bạn.';
-  const image = block.image || props.page.productOverrides?.image || props.product?.image;
-  const layout = block.layout || 'right-image';
-  const content = <div className={`relative z-10 py-4 ${layout === 'center' || layout === 'overlay' || layout === 'full-width' ? 'mx-auto max-w-3xl text-center' : ''}`}><span className="text-[10px] font-bold uppercase tracking-[.22em] text-gold-light">{block.eyebrow || 'VOLTARA CHÍNH HÃNG'}</span><h1 className="mt-3 text-3xl font-black uppercase leading-tight md:text-5xl">{title}</h1><p className="mt-4 text-sm leading-6 opacity-70 md:text-base">{description}</p><a href={block.ctaTarget || '#dat-hang'} className="landing-button mt-6 inline-block px-6 py-3 text-xs font-black uppercase">{block.ctaLabel || props.page.productOverrides?.ctaLabel || 'Đặt hàng ngay'}</a></div>;
-  const visual = <div className="relative z-10 flex min-h-64 items-center justify-center">{image ? <img src={image} alt={title} className="max-h-[520px] w-full object-contain" /> : <span className="text-xs uppercase opacity-30">Chưa có ảnh sản phẩm</span>}</div>;
+  const image = block.image || props.page.productOverrides?.image || props.product?.image || (dealerFallback ? '/images/dai-ly.webp' : undefined);
+  const layout = dealerFallback ? 'overlay' : (block.layout || 'right-image');
+  const frameBlock = dealerFallback ? { ...block, style: { ...block.style, textColor: '#ffffff', paddingTop: 0, paddingBottom: 0 } } : block;
+  const content = <div className={`relative z-10 py-4 ${layout === 'center' || layout === 'overlay' || layout === 'full-width' ? 'mx-auto max-w-3xl text-center' : ''} ${layout === 'overlay' || layout === 'full-width' ? 'text-white' : ''}`}><span className="text-[10px] font-bold uppercase tracking-[.22em] text-gold-light">{block.eyebrow || 'VOLTARA CHÍNH HÃNG'}</span><h1 className="mt-3 text-3xl font-black uppercase leading-tight md:text-5xl">{title}</h1><p className="mt-4 text-sm leading-6 opacity-80 md:text-base">{description}</p><a href={block.ctaTarget || '#dat-hang'} className="landing-button mt-6 inline-block px-6 py-3 text-xs font-black uppercase">{block.ctaLabel || props.page.productOverrides?.ctaLabel || 'Đặt hàng ngay'}</a></div>;
+  const visual = <div className="relative z-10 flex min-h-64 items-center justify-center overflow-hidden border border-current/10 bg-[var(--landing-surface)] p-4 shadow-sm">{image ? <img src={image} alt={title} className="max-h-[520px] w-full object-contain" /> : <span className="text-xs uppercase opacity-30">Chưa có ảnh sản phẩm</span>}</div>;
   const background = block.backgroundImage || ((layout === 'overlay' || layout === 'full-width') ? image : undefined);
-  if (layout === 'overlay' || layout === 'full-width') return <Frame {...props} className="overflow-hidden"><div className="relative -mx-5 flex min-h-[520px] items-center justify-center bg-cover bg-center px-6" style={background ? { backgroundImage: `linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,.7)),url(${background})` } : undefined}>{content}</div></Frame>;
-  if (layout === 'center') return <Frame {...props} className="overflow-hidden"><div className="mx-auto max-w-5xl">{content}{visual}</div></Frame>;
-  return <Frame {...props} className="overflow-hidden"><div className={`mx-auto grid items-center gap-8 ${responsiveGrid(props.mode, 'grid-cols-2')}`}>{layout === 'left-image' ? <>{visual}{content}</> : <>{content}{visual}</>}</div></Frame>;
+  if (layout === 'overlay' || layout === 'full-width') return <Frame {...props} block={frameBlock} className="overflow-hidden"><div className="relative -mx-5 flex min-h-[520px] items-center justify-center bg-cover bg-center px-6" style={background ? { backgroundImage: `linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.76)),url(${background})` } : undefined}>{content}</div></Frame>;
+  if (layout === 'center') return <Frame {...props} block={frameBlock} className="overflow-hidden"><div className="mx-auto max-w-5xl">{content}{visual}</div></Frame>;
+  return <Frame {...props} block={frameBlock} className="overflow-hidden"><div className={`mx-auto grid items-center gap-8 ${responsiveGrid(props.mode, 'grid-cols-2')}`}>{layout === 'left-image' ? <>{visual}{content}</> : <>{content}{visual}</>}</div></Frame>;
 }
 
 export function BannerBlockRenderer(props: BlockRendererProps) {
@@ -103,12 +112,12 @@ export function VideoBlockRenderer(props: BlockRendererProps) {
 
 export function BenefitsBlockRenderer(props: BlockRendererProps) {
   const block = props.block as BenefitsLandingBlock;
-  return <Frame {...props}><div className="mx-auto max-w-6xl"><h2 className="text-2xl font-black uppercase md:text-3xl">{block.title || 'Lợi ích nổi bật'}</h2><div className={`mt-6 grid gap-3 ${responsiveGrid(props.mode, 'grid-cols-3')}`}>{block.items.map((item) => <div key={item.id} className="border border-current/10 bg-black/10 p-5">{item.image && <img src={item.image} alt="" className="mb-4 h-14 w-14 object-contain" />}<b className="text-sm uppercase">{item.title}</b><p className="mt-2 text-xs leading-5 opacity-60">{item.description}</p></div>)}{!block.items.length && <p className="col-span-full border border-dashed border-white/15 p-8 text-center text-xs opacity-30">Chưa có nội dung lợi ích</p>}</div></div></Frame>;
+  return <Frame {...props}><div className="mx-auto max-w-6xl"><h2 className="text-2xl font-black uppercase md:text-3xl">{block.title || 'Lợi ích nổi bật'}</h2><div className={`mt-6 grid gap-4 ${responsiveGrid(props.mode, 'grid-cols-3')}`}>{block.items.map((item) => <div key={item.id} className="border border-current/10 bg-[var(--landing-surface)] p-6 shadow-sm">{item.image && <img src={item.image} alt="" className="mb-4 h-14 w-14 object-contain" />}<span className="mb-4 block h-1 w-12 bg-[var(--landing-primary)]" /><b className="text-sm uppercase">{item.title}</b><p className="mt-2 text-sm leading-6 opacity-65">{item.description}</p></div>)}{!block.items.length && <p className="col-span-full border border-dashed border-white/15 p-8 text-center text-xs opacity-30">Chưa có nội dung lợi ích</p>}</div></div></Frame>;
 }
 
 export function FeaturesBlockRenderer(props: BlockRendererProps) {
   const block = props.block as FeaturesLandingBlock;
-  return <Frame {...props}><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-black uppercase">{block.title || 'Tính năng nổi bật'}</h2><div className="mt-6 space-y-3">{block.items.map((item) => <div key={item.id} className="flex gap-4 border-b border-current/10 pb-3"><span className="text-gold-light">✓</span><div><b>{item.title}</b><p className="text-sm opacity-60">{item.description}</p></div></div>)}</div></div></Frame>;
+  return <Frame {...props}><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-black uppercase">{block.title || 'Tính năng nổi bật'}</h2><div className={`mt-6 grid gap-4 ${responsiveGrid(props.mode, 'grid-cols-3')}`}>{block.items.map((item, index) => <div key={item.id} className="border border-current/10 bg-[var(--landing-surface)] p-5 shadow-sm"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--landing-primary)] text-sm font-black text-black">{index + 1}</span><div className="mt-4"><b>{item.title}</b><p className="mt-2 text-sm leading-6 opacity-65">{item.description}</p></div></div>)}</div></div></Frame>;
 }
 
 export function SpecificationsBlockRenderer(props: BlockRendererProps) {
@@ -136,9 +145,20 @@ export function GiftBlockRenderer(props: BlockRendererProps) { const block = pro
 
 export function CountdownBlockRenderer(props: BlockRendererProps) { const block = props.block as CountdownLandingBlock; const [now, setNow] = useState(0); useEffect(() => { setNow(Date.now()); const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []); const end = block.endsAt ? new Date(block.endsAt).getTime() : 0; const remaining = now ? Math.max(0, end - now) : 0; const expired = Boolean(now && end && remaining === 0); if (expired && block.hideWhenExpired) return null; const days = Math.floor(remaining / 86400000); const hours = Math.floor(remaining / 3600000) % 24; const minutes = Math.floor(remaining / 60000) % 60; const seconds = Math.floor(remaining / 1000) % 60; return <Frame {...props}><div className="mx-auto max-w-4xl text-center"><h2 className="text-2xl font-black uppercase">{block.title}</h2><p className="mt-4 text-xl tracking-widest text-gold-light">{!now ? 'Đang tính thời gian…' : expired ? block.expiredMessage : end ? `${days} ngày · ${hours} giờ · ${minutes} phút · ${seconds} giây` : 'Thời gian sẽ được cập nhật'}</p></div></Frame>; }
 
-export function ReviewsBlockRenderer(props: BlockRendererProps) { const block = props.block as ReviewsLandingBlock; return <Frame {...props}><div className="mx-auto max-w-6xl"><h2 className="text-2xl font-black uppercase">{block.title}</h2><div className={`mt-6 grid gap-3 ${responsiveGrid(props.mode, 'grid-cols-3')}`}>{block.items.map((item) => <blockquote key={item.id} className="border border-current/10 p-5"><span className="text-gold-light">{'★'.repeat(item.rating || 5)}</span><p className="mt-3 text-sm opacity-70">“{item.content}”</p><b className="mt-4 block text-xs uppercase">{item.name}</b></blockquote>)}</div></div></Frame>; }
+export function ReviewsBlockRenderer(props: BlockRendererProps) { const block = props.block as ReviewsLandingBlock; const productName = props.product?.name || props.page.productOverrides?.title || 'sản phẩm này'; const dealerSamples = [{ id: 'dealer-review-fallback-1', name: 'Đại lý ngành công cụ · Nội dung mẫu', content: 'Chính sách hợp tác rõ ràng, đội ngũ hỗ trợ phản hồi nhanh và tài liệu sản phẩm dễ triển khai cho khách hàng.', rating: 5 }, { id: 'dealer-review-fallback-2', name: 'Cửa hàng thiết bị · Nội dung mẫu', content: 'Danh mục sản phẩm có định hướng rõ, phù hợp để mở rộng nhóm khách hàng cần giải pháp pin và lưu trữ năng lượng.', rating: 5 }, { id: 'dealer-review-fallback-3', name: 'Đối tác phân phối · Nội dung mẫu', content: 'Quy trình tư vấn minh bạch giúp chúng tôi dễ lựa chọn phương án nhập hàng theo quy mô kinh doanh.', rating: 5 }]; const productSamples = [{ id: 'product-review-fallback-1', name: 'Khách hàng đã mua · Nội dung mẫu', content: `${productName} có thông tin rõ ràng, đóng gói cẩn thận và đội ngũ tư vấn hỗ trợ nhanh.`, rating: 5 }, { id: 'product-review-fallback-2', name: 'Khách hàng sử dụng · Nội dung mẫu', content: 'Sản phẩm dễ sử dụng, hoàn thiện chắc chắn và đáp ứng tốt nhu cầu công việc thực tế.', rating: 5 }, { id: 'product-review-fallback-3', name: 'Khách hàng Voltara · Nội dung mẫu', content: 'Tôi hài lòng với quá trình tư vấn, hướng dẫn sử dụng và chính sách hỗ trợ sau mua.', rating: 5 }]; const items = block.items.length ? block.items : props.page.templateId === 'dealer-recruitment' ? dealerSamples : props.page.primaryProductId ? productSamples : []; return <Frame {...props}><div className="mx-auto max-w-6xl"><h2 className="text-2xl font-black uppercase">{block.title}</h2><div className={`mt-6 grid gap-4 ${responsiveGrid(props.mode, 'grid-cols-3')}`}>{items.map((item) => <blockquote key={item.id} className="border border-current/10 bg-[var(--landing-surface)] p-6 shadow-sm"><span className="text-sm tracking-wider text-[var(--landing-accent)]">{'★'.repeat(item.rating || 5)}</span><p className="mt-4 text-sm leading-6 opacity-75">“{item.content}”</p><b className="mt-5 block border-t border-current/10 pt-4 text-xs uppercase">{item.name}</b></blockquote>)}</div></div></Frame>; }
 
-export function FaqBlockRenderer(props: BlockRendererProps) { const block = props.block as FaqLandingBlock; return <Frame {...props}><div className="mx-auto max-w-4xl"><h2 className="text-2xl font-black uppercase">{block.title}</h2><div className="mt-5 divide-y divide-current/10 border-y border-current/10">{block.items.map((item) => <details key={item.id} open={item.openByDefault} className="group py-4"><summary className="cursor-pointer list-none font-bold">{item.question}</summary><p className="pt-3 text-sm leading-6 opacity-65">{item.answer}</p></details>)}</div></div></Frame>; }
+export function FaqBlockRenderer(props: BlockRendererProps) {
+  const block = props.block as FaqLandingBlock;
+  const productName = props.product?.name || props.page.productOverrides?.title || 'Sản phẩm này';
+  const productSamples: FaqLandingBlock['items'] = [
+    { id: 'product-faq-fallback-fit', question: `${productName} phù hợp với nhu cầu nào?`, answer: 'Bạn nên đối chiếu mục đích sử dụng với thông số kỹ thuật trên trang. Nếu chưa chắc chắn, hãy để lại số điện thoại để đội ngũ Voltara tư vấn cấu hình phù hợp.' },
+    { id: 'product-faq-fallback-warranty', question: 'Sản phẩm được bảo hành như thế nào?', answer: 'Thời hạn và điều kiện bảo hành áp dụng theo chính sách được công bố cho từng sản phẩm. Voltara sẽ xác nhận đầy đủ khi tư vấn hoặc xác nhận đơn hàng.' },
+    { id: 'product-faq-fallback-order', question: 'Tôi có được tư vấn trước khi đặt hàng không?', answer: 'Có. Bạn có thể gửi form hoặc liên hệ kênh hỗ trợ trên trang để được tư vấn về thông số, khả năng tương thích và nhu cầu sử dụng.' },
+    { id: 'product-faq-fallback-delivery', question: 'Thời gian giao hàng dự kiến bao lâu?', answer: 'Thời gian giao hàng phụ thuộc khu vực và tình trạng sản phẩm. Đội ngũ Voltara sẽ thông báo thời gian dự kiến khi xác nhận đơn.' },
+  ];
+  const items = block.items.length ? block.items : props.page.primaryProductId ? productSamples : [];
+  return <Frame {...props}><div className="mx-auto max-w-4xl"><h2 className="text-2xl font-black uppercase">{block.title}</h2><div className="mt-5 divide-y divide-current/10 overflow-hidden border border-current/10">{items.map((item) => <details key={item.id} open={item.openByDefault} className="group px-5 py-4"><summary className="cursor-pointer list-none font-bold">{item.question}</summary><p className="pt-3 text-sm leading-6 opacity-65">{item.answer}</p></details>)}</div></div></Frame>;
+}
 
 export function WarrantyBlockRenderer(props: BlockRendererProps) { const block = props.block as WarrantyLandingBlock; return <Frame {...props}><div className="mx-auto max-w-4xl text-center">{block.image && <img src={block.image} alt="" className="mx-auto mb-5 max-h-56 object-contain" />}<h2 className="text-2xl font-black uppercase">{block.title || 'Bảo hành chính hãng'}</h2><p className="mt-3 opacity-65">{block.description || props.product?.warranty}</p>{block.items?.length ? <ul className="mt-4 space-y-2 text-sm">{block.items.map((item) => <li key={item}>✓ {item}</li>)}</ul> : null}</div></Frame>; }
 

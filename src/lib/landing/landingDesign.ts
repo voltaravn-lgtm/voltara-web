@@ -7,14 +7,24 @@ export const DARK_LANDING_DESIGN: LandingDesignTokens = {
 };
 
 export const LIGHT_LANDING_DESIGN: LandingDesignTokens = {
-  ...DARK_LANDING_DESIGN, backgroundColor: '#ffffff', surfaceColor: '#f4f4f5', textColor: '#151515', mutedTextColor: '#626262', shadow: 'soft',
+  ...DARK_LANDING_DESIGN, primaryColor: '#f5b91f', accentColor: '#8a5600', backgroundColor: '#fffdf8', surfaceColor: '#ffffff', textColor: '#15120d', mutedTextColor: '#625c52', radius: 10, shadow: 'soft',
 };
 
-export function getLandingDesign(page: LandingPage): LandingDesignTokens {
-  return { ...(page.layout.theme === 'light' ? LIGHT_LANDING_DESIGN : DARK_LANDING_DESIGN), ...(page.design || {}) };
+const LIGHT_TEMPLATE_IDS = new Set([
+  'dealer-recruitment', 'single-product', 'promotion-product', 'product-combo',
+  'consultation-lead', 'shopee-redirect', 'technical-product',
+]);
+
+export function usesLightLandingDesign(page: LandingPage) {
+  return page.layout.theme === 'light' || (!page.design && LIGHT_TEMPLATE_IDS.has(page.templateId));
 }
 
-const fontMap = { sans: 'Arial, Helvetica, sans-serif', display: 'var(--font-display, Arial Black, Arial, sans-serif)', serif: 'Georgia, Times New Roman, serif' };
+export function getLandingDesign(page: LandingPage): LandingDesignTokens {
+  return { ...(usesLightLandingDesign(page) ? LIGHT_LANDING_DESIGN : DARK_LANDING_DESIGN), ...(page.design || {}) };
+}
+
+const vietnameseSans = 'Inter, "Segoe UI", Arial, Helvetica, sans-serif';
+const fontMap = { sans: vietnameseSans, display: vietnameseSans, serif: 'Georgia, "Times New Roman", serif' };
 const shadowMap = { none: 'none', soft: '0 12px 35px rgba(0,0,0,.16)', strong: '0 18px 55px rgba(0,0,0,.35)' };
 
 export function landingDesignStyle(page: LandingPage): React.CSSProperties {

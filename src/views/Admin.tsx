@@ -208,7 +208,7 @@ export default function Admin() {
       {/* Golden accent ambient ray */}
       <div className="absolute top-0 right-1/4 w-[400px] h-[400px] bg-[#D89A2B]/5 rounded-full filter blur-3xl pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+      <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb Info header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 mb-10 border-b border-gold-dark/15">
           <div className="flex items-center gap-3">
@@ -229,10 +229,10 @@ export default function Admin() {
         </div>
 
         {/* Dashboard Grid split into Left sidebar controls vs Right view editor */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
           
           {/* 1. SIDEBAR CONTROLS */}
-          <div className="lg:col-span-1 flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             
             <button
               id="admin-tab-hero"
@@ -579,7 +579,7 @@ export default function Admin() {
           </div>
 
           {/* 2. CHOSEN SECTION FRAME COMPONENT */}
-          <div className="lg:col-span-3 bg-[#0A0A0A] border border-[#1A1A1A] p-6 sm:p-8">
+          <div className="min-w-0 bg-[#0A0A0A] border border-[#1A1A1A] p-6 sm:p-8">
             
             {/* T1. HERO SETTINGS EDITOR */}
             {activeTab === "hero" && (

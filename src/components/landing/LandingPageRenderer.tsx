@@ -3,14 +3,14 @@ import { LandingPage } from '../../types/landing';
 import { getLandingBlockRenderer } from './blockRendererRegistry';
 import LandingFooter from './LandingFooter';
 import LandingHeader from './LandingHeader';
-import { landingDesignStyle } from '../../lib/landing/landingDesign';
+import { landingDesignStyle, usesLightLandingDesign } from '../../lib/landing/landingDesign';
 import LandingTracking from './LandingTracking';
 
 interface LandingPageRendererProps { page: LandingPage; product?: Product | null; products?: Product[]; }
 
 export default function LandingPageRenderer({ page, product, products = [] }: LandingPageRendererProps) {
-  const dark = page.layout.theme === 'dark';
-  return <div style={landingDesignStyle(page)} data-button-style={page.design?.buttonStyle || 'solid'} className={`landing-root min-h-screen overflow-x-hidden ${dark ? 'bg-[#070707] text-white' : 'bg-white text-[#141414]'}`}>
+  const dark = !usesLightLandingDesign(page);
+  return <div style={landingDesignStyle(page)} data-template={page.templateId} data-button-style={page.design?.buttonStyle || 'solid'} className={`landing-root min-h-screen overflow-x-hidden ${dark ? 'bg-[#070707] text-white' : 'bg-white text-[#141414]'}`}>
     <LandingTracking page={page} product={product} />
     {!page.layout.hideHeader && <LandingHeader />}
     <main>
