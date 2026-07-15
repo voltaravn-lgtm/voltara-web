@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Menu, X, Search, ShoppingCart, Sun, Moon } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import CartDrawer from "./CartDrawer";
@@ -86,6 +86,7 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDayMode, setIsDayMode] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -130,6 +131,15 @@ export default function Header() {
   const visibleMenuItems = menuItems.filter((item) => !item.hidden);
   const visibleProductCategories = productCategories.filter((category) => !category.hidden);
   const normalizedSearch = searchQuery.trim().toLowerCase();
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    navigate(`/san-pham?search=${encodeURIComponent(query)}`);
+    setIsSearchOpen(false);
+    setSearchQuery("");
+  };
   const searchResults = normalizedSearch
     ? [
         ...products
@@ -412,7 +422,7 @@ export default function Header() {
       {isSearchOpen && (
         <div className="fixed inset-0 z-[75] bg-black/85 p-3 backdrop-blur-sm sm:p-4" onClick={() => setIsSearchOpen(false)}>
           <div className="mx-auto mt-12 w-full max-w-2xl border border-gold-dark/30 bg-[#0A0A0A] p-3 shadow-2xl sm:mt-24 sm:p-4" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center gap-3 border border-white/10 bg-black px-4 py-3">
+            <form onSubmit={handleSearchSubmit} className="flex items-center gap-3 border border-white/10 bg-black px-4 py-3">
               <Search className="h-5 w-5 text-gold-light" />
               <input
                 autoFocus
@@ -425,7 +435,12 @@ export default function Header() {
               <button type="button" onClick={() => setIsSearchOpen(false)} className="p-1 text-gray-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
-            </div>
+            </form>
+            {normalizedSearch && (
+              <p className="mt-2 px-1 text-[9px] font-mono uppercase tracking-wider text-gray-600">
+                Nhấn Enter để xem tất cả sản phẩm phù hợp
+              </p>
+            )}
 
             <div className="mt-3 max-h-[65vh] overflow-y-auto sm:mt-4 sm:max-h-[55vh]">
               {!normalizedSearch ? (

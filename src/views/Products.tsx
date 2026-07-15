@@ -124,12 +124,17 @@ export default function Products() {
 
   const categoryParamFromUrl = searchParams.get("category");
   const subCategoryParamFromUrl = searchParams.get("sub");
+  const searchParamFromUrl = searchParams.get("search") || "";
   const categoryParamFromPath = getCategoryFromPath(location.pathname);
 
   useEffect(() => {
     setActiveCategory(categoryParamFromPath || categoryParamFromUrl || "all");
     setActiveSubCategory(subCategoryParamFromUrl || "all");
   }, [categoryParamFromPath, categoryParamFromUrl, subCategoryParamFromUrl]);
+
+  useEffect(() => {
+    setSearchQuery(searchParamFromUrl);
+  }, [searchParamFromUrl]);
 
   // Auto detect select from url query
   useEffect(() => {
@@ -160,8 +165,15 @@ export default function Products() {
     const matchesBrand = filterBrand === "all" || prod.brand === filterBrand;
     const matchesVoltage = filterVoltage === "all" || prod.voltage === filterVoltage;
     const matchesCapacity = filterCapacity === "all" || prod.capacity === filterCapacity;
-    const matchesSearch = prod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          prod.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const matchesSearch = !normalizedQuery ||
+                          prod.name.toLowerCase().includes(normalizedQuery) ||
+                          prod.id.toLowerCase().includes(normalizedQuery) ||
+                          (prod.sku || "").toLowerCase().includes(normalizedQuery) ||
+                          prod.description.toLowerCase().includes(normalizedQuery) ||
+                          prod.category.toLowerCase().includes(normalizedQuery) ||
+                          prod.voltage.toLowerCase().includes(normalizedQuery) ||
+                          prod.capacity.toLowerCase().includes(normalizedQuery);
 
     return matchesCategory && matchesSubCategory && matchesBrand && matchesVoltage && matchesCapacity && matchesSearch;
   }).sort((a, b) => {
