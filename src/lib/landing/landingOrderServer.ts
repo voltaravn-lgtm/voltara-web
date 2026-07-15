@@ -33,7 +33,13 @@ function validateCustomer(input: LandingOrderRequestInput, form: OrderFormLandin
   const customerName = clean(input.customerName, 120); const address = clean(input.address, 500);
   if (type !== 'phone-only' && form.showName !== false && !customerName) throw new LandingOrderError('Vui lòng nhập tên khách hàng.');
   if (type === 'order' && form.showAddress !== false && !address) throw new LandingOrderError('Vui lòng nhập địa chỉ nhận hàng.');
-  return { phone, customerName, address, province: clean(input.province, 120), district: clean(input.district, 120), ward: clean(input.ward, 120), note: clean(input.note, 1000) };
+  const businessName = clean(input.businessName, 160);
+  const businessType = clean(input.businessType, 120);
+  if (form.showBusinessName && !businessName) throw new LandingOrderError('Vui lòng nhập tên cửa hàng hoặc doanh nghiệp.');
+  if (form.showBusinessType && !businessType) throw new LandingOrderError('Vui lòng chọn mô hình kinh doanh.');
+  const estimatedVolume = clean(input.estimatedVolume, 120);
+  const note = [businessName && `Đơn vị: ${businessName}`, businessType && `Mô hình: ${businessType}`, estimatedVolume && `Sản lượng dự kiến: ${estimatedVolume}`, clean(input.note, 1000)].filter(Boolean).join(' · ').slice(0, 1000);
+  return { phone, customerName, address, province: clean(input.province, 120), district: clean(input.district, 120), ward: clean(input.ward, 120), note, businessName, businessType, estimatedVolume };
 }
 
 function exactCombo(items: LandingOrderRequestInput['items'], combos: ComboLandingBlock[]) {

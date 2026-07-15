@@ -63,3 +63,10 @@ test('publish validation accepts a ready order landing', () => {
   assert.equal(result.valid, true);
   assert.deepEqual(result.errors, []);
 });
+
+test('publish validation accepts a dealer lead landing without a product', () => {
+  const form = orderForm({ productIds: [], formType: 'consultation', showBusinessName: true, showBusinessType: true });
+  const result = validateLandingPageForPublish(page({ primaryProductId: undefined, templateId: 'dealer-recruitment', blocks: [form] }));
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.errors, []);
+});

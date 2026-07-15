@@ -122,8 +122,8 @@ export function validateLandingPageForPublish(page: LandingPage): LandingPublish
   const productIds = collectLandingProductIds(page);
   const orderForms = page.blocks.filter((block): block is OrderFormLandingBlock => block.type === "order-form" && !block.hidden);
 
-  if (page.templateId !== "blank" && !page.primaryProductId) errors.push("Landing created from a sales template must have a primary product before publish.");
-  if (orderForms.length && productIds.size === 0) errors.push("Order Form needs at least one valid product before publish.");
+  if (page.templateId !== "blank" && page.templateId !== "dealer-recruitment" && !page.primaryProductId) errors.push("Landing created from a sales template must have a primary product before publish.");
+  if (orderForms.some((form) => (form.formType || "order") === "order") && productIds.size === 0) errors.push("Order Form needs at least one valid product before publish.");
   orderForms.forEach((form) => {
     const ids = form.productIds?.filter(Boolean) || [];
     if ((form.formType || "order") === "order" && ids.length === 0 && !page.primaryProductId) errors.push(`Order Form "${form.label || form.title || form.id}" has no product.`);

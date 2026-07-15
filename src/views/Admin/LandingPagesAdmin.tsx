@@ -17,6 +17,7 @@ import CreateLandingFromProduct from '../../components/Admin/LandingBuilder/Crea
 import LandingBuilder from '../../components/Admin/LandingBuilder/LandingBuilder';
 import { ImageUrlField } from '../../components/Admin/LandingBuilder/BlockEditorFields';
 import { revalidateLandingCache } from '../../lib/landing/landingCacheClient';
+import { createStandaloneLandingTemplateData, getLandingTemplate } from '../../lib/landing/landingTemplates';
 
 type LandingForm = LandingPage;
 type StatusFilter = 'all' | LandingPage['status'];
@@ -80,6 +81,36 @@ export default function LandingPagesAdmin() {
   const openCreate = () => {
     setForm(createEmptyForm());
     setIsFormOpen(true);
+  };
+
+  const createDealerLanding = async () => {
+    const template = getLandingTemplate('dealer-recruitment');
+    if (!template) return showToast('Không tìm thấy mẫu tuyển đại lý.', 'error');
+    setSaving(true);
+    try {
+      const baseSlug = 'dang-ky-dai-ly';
+      let slug = baseSlug;
+      let suffix = 2;
+      while (!await isLandingSlugAvailable(slug)) slug = `${baseSlug}-${suffix++}`;
+      const base = createDefaultLandingPage();
+      const { createdAt: _createdAt, updatedAt: _updatedAt, ...input } = {
+        ...base,
+        ...createStandaloneLandingTemplateData(template),
+        name: 'Landing - Tuyển đại lý',
+        slug,
+        seo: {
+          title: 'Đăng ký trở thành đại lý Voltara',
+          description: 'Nhận chính sách hợp tác, hỗ trợ bán hàng và cơ hội phát triển thị trường cùng Voltara.',
+        },
+      };
+      const page = await createLandingPage(input);
+      setBuilderPageId(page.id);
+      showToast('Đã tạo mẫu Landing tuyển đại lý. Bạn có thể chỉnh nội dung ngay trong Builder.', 'success');
+    } catch (error) {
+      showToast(errorMessage(error), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openEdit = (page: LandingPage) => {
@@ -209,7 +240,7 @@ export default function LandingPagesAdmin() {
   return <div className="space-y-5">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div><h2 className="flex items-center gap-2 font-display text-lg font-black uppercase text-gold-light"><PanelsTopLeft className="h-5 w-5" /> Landing Pages</h2><p className="mt-1 text-xs text-gray-400">Quản lý trang bán hàng chạy quảng cáo. Product Picker, Template và Builder sẽ được bổ sung ở Task 3–4.</p></div>
-      <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={openCreate} className="flex items-center justify-center gap-2 border border-gold-dark/40 px-5 py-3 text-xs font-black uppercase tracking-wider text-gold-light hover:border-gold-light"><FilePlus2 className="h-4 w-4" /> Tạo trang trống</button><button type="button" onClick={() => setIsProductWizardOpen(true)} className="flex items-center justify-center gap-2 bg-gold-light px-5 py-3 text-xs font-black uppercase tracking-wider text-black hover:brightness-110"><PackagePlus className="h-4 w-4" /> Tạo từ sản phẩm</button></div>
+      <div className="flex flex-col gap-2 sm:flex-row"><button type="button" disabled={saving} onClick={() => void createDealerLanding()} className="flex items-center justify-center gap-2 border border-emerald-500/40 px-5 py-3 text-xs font-black uppercase tracking-wider text-emerald-400 hover:bg-emerald-500 hover:text-black disabled:opacity-50"><PanelsTopLeft className="h-4 w-4" /> Tạo landing đại lý</button><button type="button" onClick={openCreate} className="flex items-center justify-center gap-2 border border-gold-dark/40 px-5 py-3 text-xs font-black uppercase tracking-wider text-gold-light hover:border-gold-light"><FilePlus2 className="h-4 w-4" /> Tạo trang trống</button><button type="button" onClick={() => setIsProductWizardOpen(true)} className="flex items-center justify-center gap-2 bg-gold-light px-5 py-3 text-xs font-black uppercase tracking-wider text-black hover:brightness-110"><PackagePlus className="h-4 w-4" /> Tạo từ sản phẩm</button></div>
     </div>
 
     {pages.length > 0 && <div className="flex items-center gap-2 overflow-x-auto border border-white/10 bg-[#0d0d0d] p-3"><span className="shrink-0 text-[9px] font-bold uppercase text-gray-600">Builder: thêm section, kéo thả, preview</span>{filteredPages.map((page) => <button type="button" key={page.id} onClick={() => setBuilderPageId(page.id)} className="flex shrink-0 items-center gap-2 border border-gold-dark/30 px-3 py-2 text-[9px] font-bold uppercase text-gold-light hover:bg-gold-light hover:text-black"><Layers3 className="h-3.5 w-3.5" />{page.name}</button>)}</div>}

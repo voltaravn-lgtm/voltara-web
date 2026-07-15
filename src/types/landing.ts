@@ -198,6 +198,9 @@ export interface OrderFormLandingBlock extends LandingBlockBase {
   showAddress?: boolean;
   showNote?: boolean;
   showQuantity?: boolean;
+  showBusinessName?: boolean;
+  showBusinessType?: boolean;
+  showEstimatedVolume?: boolean;
 }
 
 export interface ContactButtonLandingBlock extends LandingBlockBase {
@@ -288,6 +291,9 @@ export interface LandingOrder {
   district?: string;
   ward?: string;
   note?: string;
+  businessName?: string;
+  businessType?: string;
+  estimatedVolume?: string;
   items: LandingOrderItemSnapshot[];
   subtotal: number;
   shippingFee: number;
@@ -313,6 +319,9 @@ export interface LandingOrderRequestInput {
   district?: string;
   ward?: string;
   note?: string;
+  businessName?: string;
+  businessType?: string;
+  estimatedVolume?: string;
   items: Array<{ productId: string; variantId?: string; quantity: number }>;
   requestId?: string;
   idempotencyKey?: string;
