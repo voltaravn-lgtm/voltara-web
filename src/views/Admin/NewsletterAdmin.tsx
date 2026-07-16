@@ -1,9 +1,20 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Calendar, Mail, Trash2 } from "lucide-react";
-import { useApp } from "../../context/AppContext";
+import { NewsletterSubscriber, useApp } from "../../context/AppContext";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../../lib/firebase";
 
 export default function NewsletterAdmin() {
-  const { newsletterSubscribers, deleteNewsletterSubscriber, showToast } = useApp();
+  const { newsletterSubscribers, setNewsletterSubscribers, deleteNewsletterSubscriber, showToast } = useApp();
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return undefined;
+    return onSnapshot(query(collection(db, "newsletterSubscribers"), limit(50)), (snapshot) => {
+      setNewsletterSubscribers(snapshot.docs
+        .map((item) => item.data() as NewsletterSubscriber)
+        .sort((a, b) => String(b.date).localeCompare(String(a.date))));
+    }, (error) => console.error("Could not load newsletter subscribers:", error));
+  }, [setNewsletterSubscribers]);
 
   const handleDelete = async (email: string) => {
     if (!window.confirm(`Xóa email "${email}" khỏi danh sách nhận tin?`)) return;

@@ -3,7 +3,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
+  query,
   setDoc,
   Unsubscribe,
 } from "firebase/firestore";
@@ -31,7 +33,7 @@ export function subscribeLandingOrders(
   onData: (orders: LandingOrder[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(collection(db, LANDING_ORDER_COLLECTION), (snapshot) => {
+  return onSnapshot(query(collection(db, LANDING_ORDER_COLLECTION), limit(50)), (snapshot) => {
     const orders = snapshot.docs
       .map((item) => landingOrderFromSnapshot(item.id, item.data()))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

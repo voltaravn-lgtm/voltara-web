@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, query as firestoreQuery, setDoc } from 'firebase/firestore';
 import { ChevronDown, PackageCheck, Search } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { DealerOrderRecord } from '../../types';
@@ -23,7 +23,7 @@ export default function DealerOrdersAdmin() {
   const [status, setStatus] = useState<'all' | DealerOrderRecord['status']>('all');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(() => new Set());
 
-  useEffect(() => onSnapshot(collection(db, 'dealerOrders'), (snapshot) => {
+  useEffect(() => onSnapshot(firestoreQuery(collection(db, 'dealerOrders'), limit(50)), (snapshot) => {
     const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as DealerOrderRecord));
     setOrders(items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
   }, (error) => {

@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product, ProductVariant, ProductCombo } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
+import { collection, getDocs, limit, query } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../../lib/firebase";
 import { getProductSlug, slugifyProductText } from "../../lib/productRoutes";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../lib/video";
 import {
@@ -281,6 +283,7 @@ function productDescriptionToExportText(description: string | undefined) {
 export default function ProductsAdmin() {
   const {
     products,
+    setProducts,
     salesPrograms,
     productCategories,
     setProductCategories,
@@ -322,6 +325,28 @@ export default function ProductsAdmin() {
   const descriptionCustomUndoIsLatestRef = useRef(false);
   const descriptionDraftRef = useRef("");
   const productFormScrollRef = useRef<HTMLFormElement | null>(null);
+  const hasSyncedProductPreviewRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || hasSyncedProductPreviewRef.current) return;
+    hasSyncedProductPreviewRef.current = true;
+    let cancelled = false;
+    getDocs(query(collection(db, "products"), limit(20))).then((snapshot) => {
+      if (cancelled || snapshot.empty) return;
+      const remoteItems = snapshot.docs.map((item) => item.data() as Product);
+      setProducts((current) => {
+        const merged = new Map(current.map((item) => [item.id, item]));
+        remoteItems.forEach((item) => merged.set(item.id, item));
+        return [...merged.values()].sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime || String(b.id).localeCompare(String(a.id), "vi");
+        });
+      });
+    }).catch((error) => console.error("Could not sync product preview:", error));
+    return () => { cancelled = true; };
+  }, [setProducts]);
+
   const activeProductCategory = productCategories.find((category) => category.id === productForm.category);
   const activeProductSubCategories = (activeProductCategory?.children || []).filter((child) => !child.hidden);
   const cleanImageUrls = (images: Partial<Product>["images"]) =>
@@ -1303,7 +1328,7 @@ export default function ProductsAdmin() {
     try {
       const urls: string[] = [];
       for (const file of selectedFiles) {
-        urls.push(await uploadImageToCloudinary(file));
+        urls.push(await uploadImageToCloudinary(file, { convertToWebp: true, webpQuality: 0.7 }));
       }
 
       if (target === "main") {
@@ -1345,6 +1370,14 @@ export default function ProductsAdmin() {
           ),
         }));
       }
+
+      const convertedCount = selectedFiles.filter(file => /^image\/(png|jpe?g)$/i.test(file.type)).length;
+      showToast(
+        convertedCount > 0
+          ? `Đã tự chuyển ${convertedCount} ảnh sang WebP 70% và tải lên.`
+          : `Đã tải ${selectedFiles.length} ảnh lên.`,
+        "success",
+      );
 
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể tải ảnh lên Cloudinary.";

@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { QuoteRequest } from "../../types";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../../lib/firebase";
 import { 
   Search, 
   Trash2, 
@@ -22,7 +24,16 @@ import {
 } from "lucide-react";
 
 export default function QuotesAdmin() {
-  const { quoteRequests, updateQuoteRequest, deleteQuoteRequest, showToast } = useApp();
+  const { quoteRequests, setQuoteRequests, updateQuoteRequest, deleteQuoteRequest, showToast } = useApp();
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return undefined;
+    return onSnapshot(query(collection(db, "quoteRequests"), limit(50)), (snapshot) => {
+      setQuoteRequests(snapshot.docs
+        .map((item) => item.data() as QuoteRequest)
+        .sort((a, b) => String(b.date).localeCompare(String(a.date))));
+    }, (error) => console.error("Could not load quote requests:", error));
+  }, [setQuoteRequests]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");

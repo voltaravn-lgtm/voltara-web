@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, setDoc, writeBatch } from "firebase/firestore";
 import { Product, ProductVariant, ProductCombo, SalesProgram, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
 import { getProductSlug } from "../lib/productRoutes";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
@@ -211,10 +211,12 @@ interface AppContextType {
 
   // Quote Requests System
   quoteRequests: QuoteRequest[];
+  setQuoteRequests: React.Dispatch<React.SetStateAction<QuoteRequest[]>>;
   addQuoteRequest: (req: QuoteRequest) => void;
   updateQuoteRequest: (req: QuoteRequest) => void;
   deleteQuoteRequest: (id: string) => void;
   newsletterSubscribers: NewsletterSubscriber[];
+  setNewsletterSubscribers: React.Dispatch<React.SetStateAction<NewsletterSubscriber[]>>;
   addNewsletterSubscriber: (email: string) => Promise<void>;
   deleteNewsletterSubscriber: (email: string) => Promise<void>;
   contactSettings: SiteContactSettings;
@@ -640,24 +642,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [canReadAdminData, setCanReadAdminData] = useState(false);
   const [menuSettingsReady, setMenuSettingsReady] = useState(!isFirebaseConfigured);
   const [productCategoriesReady, setProductCategoriesReady] = useState(!isFirebaseConfigured);
-  const hasAttemptedProductMigration = useRef(false);
-  const hasAttemptedCourseMigration = useRef(false);
   const hasSyncedMenuSettings = useRef(!isFirebaseConfigured);
   const hasSyncedProductCategories = useRef(!isFirebaseConfigured);
   const lastMenuSettingsJson = useRef("");
   const lastProductCategoriesJson = useRef("");
 
-  const dismissToast = (id: string) => {
+  const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
-  const showToast = (message: string, type: "success" | "error" | "info" | "warning" = "success") => {
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" | "warning" = "success") => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       dismissToast(id);
     }, 3500);
-  };
+  }, [dismissToast]);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return undefined;
@@ -699,92 +699,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     if (isAdminRoute) {
-      const unsubscribeContactSettings = onSnapshot(
-        doc(db, "siteSettings", "contact"),
-        (snapshot) => {
-          if (!snapshot.exists()) return;
-          setContactSettings({ ...defaultContactSettings, ...(snapshot.data() as Partial<SiteContactSettings>) });
-        },
-        (error) => {
-          console.error("Could not load site contact settings from Firestore:", error);
-        }
-      );
-
-      const unsubscribePromoOverlaySettings = onSnapshot(
-        doc(db, "siteSettings", "promoOverlay"),
-        (snapshot) => {
-          if (!snapshot.exists()) return;
-          setPromoOverlaySettings({ ...defaultPromoOverlaySettings, ...(snapshot.data() as Partial<PromoOverlaySettings>) });
-        },
-        (error) => {
-          console.error("Could not load promo overlay settings from Firestore:", error);
-        }
-      );
-
-      const unsubscribeDealerPricing = onSnapshot(
-        doc(db, "siteSettings", "dealerPricing"),
-        (snapshot) => {
-          if (!snapshot.exists()) return;
-          setDealerPricingSettings(normalizeDealerPricingSettings(snapshot.data() as Partial<DealerPricingSettings>));
-        },
-        (error) => console.error("Could not load dealer pricing settings:", error)
-      );
-
-      const unsubscribeMenuSettings = onSnapshot(
-        doc(db, "siteSettings", "menu"),
-        applyMenuSnapshot,
-        (error) => {
-          hasSyncedMenuSettings.current = true;
-          setMenuSettingsReady(true);
-          console.error("Could not load menu settings from Firestore:", error);
-        }
-      );
-
-      const unsubscribeProductCategories = onSnapshot(
-        doc(db, "siteSettings", "productCategories"),
-        applyProductCategoriesSnapshot,
-        (error) => {
-          hasSyncedProductCategories.current = true;
-          setProductCategoriesReady(true);
-          console.warn("Could not load product categories from Firestore:", error);
-        }
-      );
-
-      const unsubscribeProducts = onSnapshot(
-        collection(db, "products"),
-        (snapshot) => {
-          if (snapshot.empty) return;
-
-          const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
-          setProducts(items);
-        },
-        (error) => {
-          console.error("Could not load products from Firestore:", error);
-        }
-      );
-
-      const unsubscribeAcademyCourses = onSnapshot(
-        collection(db, "academyCourses"),
-        (snapshot) => {
-          if (snapshot.empty) return;
-
-          const items = sortCoursesNewestFirst(snapshot.docs.map((item) => item.data() as Course));
-          setAcademyCourses(items);
-        },
-        (error) => {
-          console.error("Could not load academy courses from Firestore:", error);
-        }
-      );
-
-      return () => {
-        unsubscribeContactSettings();
-        unsubscribePromoOverlaySettings();
-        unsubscribeDealerPricing();
-        unsubscribeMenuSettings();
-        unsubscribeProductCategories();
-        unsubscribeProducts();
-        unsubscribeAcademyCourses();
-      };
+      let cancelled = false;
+      Promise.all([
+        getDoc(doc(db, "siteSettings", "contact")),
+        getDoc(doc(db, "siteSettings", "promoOverlay")),
+        getDoc(doc(db, "siteSettings", "menu")),
+        getDoc(doc(db, "siteSettings", "productCategories")),
+        getDoc(doc(db, "siteSettings", "dealerPricing")),
+      ]).then(([contactSnapshot, promoOverlaySnapshot, menuSnapshot, productCategoriesSnapshot, dealerPricingSnapshot]) => {
+        if (cancelled) return;
+        if (contactSnapshot.exists()) setContactSettings({ ...defaultContactSettings, ...(contactSnapshot.data() as Partial<SiteContactSettings>) });
+        if (promoOverlaySnapshot.exists()) setPromoOverlaySettings({ ...defaultPromoOverlaySettings, ...(promoOverlaySnapshot.data() as Partial<PromoOverlaySettings>) });
+        applyMenuSnapshot(menuSnapshot);
+        applyProductCategoriesSnapshot(productCategoriesSnapshot);
+        if (dealerPricingSnapshot.exists()) setDealerPricingSettings(normalizeDealerPricingSettings(dealerPricingSnapshot.data() as Partial<DealerPricingSettings>));
+      }).catch((error) => {
+        if (cancelled) return;
+        hasSyncedMenuSettings.current = true;
+        hasSyncedProductCategories.current = true;
+        setMenuSettingsReady(true);
+        setProductCategoriesReady(true);
+        console.error("Could not load admin site settings from Firestore:", error);
+      });
+      return () => { cancelled = true; };
     }
 
     let cancelled = false;
@@ -823,22 +760,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       try {
         if (shouldRefreshPublicFirestoreCache("voltara_products_last_firestore_sync")) {
-          const snapshot = await getDocs(collection(db, "products"));
+          const snapshot = await getDocs(query(collection(db, "products"), limit(24)));
           if (!cancelled && !snapshot.empty) {
             const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
-            setProducts(items);
+            setProducts((current) => {
+              const merged = new Map(current.map((item) => [item.id, item]));
+              items.forEach((item) => merged.set(item.id, item));
+              return sortProductsNewestFirst([...merged.values()]);
+            });
             localStorage.setItem("voltara_products_last_firestore_sync", String(Date.now()));
           }
         }
 
-        if (shouldRefreshPublicFirestoreCache("voltara_academy_courses_last_firestore_sync")) {
-          const snapshot = await getDocs(collection(db, "academyCourses"));
-          if (!cancelled && !snapshot.empty) {
-            const items = sortCoursesNewestFirst(snapshot.docs.map((item) => item.data() as Course));
-            setAcademyCourses(items);
-            localStorage.setItem("voltara_academy_courses_last_firestore_sync", String(Date.now()));
-          }
-        }
       } catch (error) {
         if (!cancelled) {
           console.error("Could not load public collection data from Firestore:", error);
@@ -852,107 +785,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cancelled = true;
     };
   }, [isAdminRoute]);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured || !canReadAdminData || hasAttemptedProductMigration.current) return;
-
-    hasAttemptedProductMigration.current = true;
-
-    const migrateProductsIfEmpty = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "products"));
-        if (!snapshot.empty) return;
-
-        const batch = writeBatch(db);
-        products.forEach((product) => {
-          batch.set(doc(db, "products", product.id), product);
-        });
-        await batch.commit();
-      } catch (error) {
-        console.error("Could not migrate products to Firestore:", error);
-      }
-    };
-
-    migrateProductsIfEmpty();
-  }, [canReadAdminData, products]);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured || !canReadAdminData || hasAttemptedCourseMigration.current) return;
-
-    hasAttemptedCourseMigration.current = true;
-
-    const migrateCoursesIfEmpty = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "academyCourses"));
-        if (!snapshot.empty) return;
-
-        const batch = writeBatch(db);
-        academyCourses.forEach((course) => {
-          const nextCourse = {
-            ...course,
-            hidden: course.hidden ?? false,
-            createdAt: course.createdAt || new Date().toISOString(),
-            updatedAt: course.updatedAt || new Date().toISOString(),
-          };
-          batch.set(doc(db, "academyCourses", nextCourse.id), nextCourse);
-        });
-        await batch.commit();
-      } catch (error) {
-        console.error("Could not migrate academy courses to Firestore:", error);
-      }
-    };
-
-    migrateCoursesIfEmpty();
-  }, [academyCourses, canReadAdminData]);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured || !canReadAdminData) return undefined;
-
-    const unsubscribeContacts = onSnapshot(
-      collection(db, "contactSubmissions"),
-      (snapshot) => {
-        const items = snapshot.docs
-          .map((item) => item.data() as ContactSubmission)
-          .sort((a, b) => String(b.id).localeCompare(String(a.id)));
-        setContactSubmissions(items);
-      },
-      (error) => {
-        console.error("Could not load contact submissions from Firestore:", error);
-      }
-    );
-
-    const unsubscribeQuotes = onSnapshot(
-      collection(db, "quoteRequests"),
-      (snapshot) => {
-        const items = snapshot.docs
-          .map((item) => item.data() as QuoteRequest)
-          .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-        setQuoteRequests(items);
-      },
-      (error) => {
-        console.error("Could not load quote requests from Firestore:", error);
-      }
-    );
-
-    const unsubscribeNewsletter = onSnapshot(
-      collection(db, "newsletterSubscribers"),
-      (snapshot) => {
-        const items = snapshot.docs
-          .map((item) => item.data() as NewsletterSubscriber)
-          .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-        setNewsletterSubscribers(items);
-      },
-      (error) => {
-        console.error("Could not load newsletter subscribers from Firestore:", error);
-      }
-    );
-
-    return () => {
-      unsubscribeContacts();
-      unsubscribeQuotes();
-      unsubscribeNewsletter();
-    };
-  }, [canReadAdminData]);
 
   // Save changes to localStorage whenever states change
   useEffect(() => {
@@ -1569,10 +1401,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         academyCourses,
         setAcademyCourses,
         quoteRequests,
+        setQuoteRequests,
         addQuoteRequest,
         updateQuoteRequest,
         deleteQuoteRequest,
         newsletterSubscribers,
+        setNewsletterSubscribers,
         addNewsletterSubscriber,
         deleteNewsletterSubscriber,
         contactSettings,

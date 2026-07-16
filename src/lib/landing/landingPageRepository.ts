@@ -73,7 +73,7 @@ export function subscribeLandingPages(
   onData: (pages: LandingPage[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(collection(db, LANDING_PAGE_COLLECTION), (snapshot) => {
+  return onSnapshot(query(collection(db, LANDING_PAGE_COLLECTION), limit(50)), (snapshot) => {
     const pages = snapshot.docs
       .map((item) => landingPageFromSnapshot(item.id, item.data()))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

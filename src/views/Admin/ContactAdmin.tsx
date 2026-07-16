@@ -1,10 +1,22 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "../../context/AppContext";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../../lib/firebase";
+import { ContactSubmission } from "../../types";
 import { Phone, Mail, Trash2, Calendar, FileText, Check, ShieldCheck, HelpCircle } from "lucide-react";
 
 export default function ContactAdmin() {
-  const { contactSubmissions, deleteSubmission } = useApp();
+  const { contactSubmissions, setContactSubmissions, deleteSubmission } = useApp();
   const [filterType, setFilterType] = useState("all");
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return undefined;
+    return onSnapshot(query(collection(db, "contactSubmissions"), limit(50)), (snapshot) => {
+      setContactSubmissions(snapshot.docs
+        .map((item) => item.data() as ContactSubmission)
+        .sort((a, b) => String(b.id).localeCompare(String(a.id))));
+    }, (error) => console.error("Could not load contact submissions:", error));
+  }, [setContactSubmissions]);
 
   const translateInquiry = (type: string) => {
     switch (type) {

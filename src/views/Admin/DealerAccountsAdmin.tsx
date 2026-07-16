@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { deleteApp, getApps, initializeApp } from 'firebase/app';
-import { collection, deleteField, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, deleteField, doc, limit, onSnapshot, query as firestoreQuery, setDoc } from 'firebase/firestore';
 import { Plus, Search, ShieldCheck } from 'lucide-react';
 import { db, firebaseConfig } from '../../lib/firebase';
 import { DealerAccount } from '../../types';
@@ -33,7 +33,7 @@ export default function DealerAccountsAdmin() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => onSnapshot(collection(db, 'dealerAccounts'), (snapshot) => {
+  useEffect(() => onSnapshot(firestoreQuery(collection(db, 'dealerAccounts'), limit(50)), (snapshot) => {
     setAccounts(snapshot.docs.map((item) => item.data() as DealerAccount).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
   }, () => showToast('Không đọc được danh sách tài khoản đại lý.', 'error')), []);
 

@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronRight, Lock, LogIn, Minus, PackageCheck, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, onSnapshot, query as firestoreQuery, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, limit, onSnapshot, query as firestoreQuery, where } from 'firebase/firestore';
 import { useApp } from '../context/AppContext';
 import { DealerAccount, DealerOrderRecord, Product } from '../types';
 import { auth, db } from '../lib/firebase';
@@ -162,7 +162,7 @@ export default function DealerOrder() {
 
   useEffect(() => {
     if (!user || !account || account.dealerCode === 'ADMIN') return undefined;
-    const ordersQuery = firestoreQuery(collection(db, 'dealerOrders'), where('dealerUid', '==', user.uid));
+    const ordersQuery = firestoreQuery(collection(db, 'dealerOrders'), where('dealerUid', '==', user.uid), limit(20));
     return onSnapshot(ordersQuery, (snapshot) => {
       const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as DealerOrderRecord));
       setOrderHistory(items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
