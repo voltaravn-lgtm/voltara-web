@@ -60,7 +60,7 @@ export default function WebPConverterPage() {
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
 
-    const allowed = ["image/jpeg", "image/jpg", "image/png"];
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     const newItems: ImageItem[] = [];
 
     for (const file of Array.from(files)) {
