@@ -654,7 +654,7 @@ export default function ProductsAdmin() {
     setIsProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productForm.id?.trim() || !productForm.name) {
       showToast("Vui lòng điền đầy đủ ID và Tên sản phẩm!", "warning");
@@ -697,10 +697,12 @@ export default function ProductsAdmin() {
       currentForm.id = nextId;
 
       if (isChangingId) {
-        addProduct(currentForm);
+        const didAdd = await addProduct(currentForm);
+        if (!didAdd) return;
         deleteProduct(originalId);
       } else {
-        updateProduct(currentForm);
+        const didUpdate = await updateProduct(currentForm);
+        if (!didUpdate) return;
       }
       showToast("Đã lưu chỉnh sửa sản phẩm thành công!", "success");
     } else {
@@ -708,7 +710,8 @@ export default function ProductsAdmin() {
         showToast("ID Sản phẩm bị trùng lặp! Hãy đổi ID khác.", "error");
         return;
       }
-      addProduct(currentForm);
+      const didAdd = await addProduct(currentForm);
+      if (!didAdd) return;
       showToast("Đã thêm sản phẩm mới thành công!", "success");
     }
     setIsProductModalOpen(false);
@@ -723,9 +726,11 @@ export default function ProductsAdmin() {
   const handleCopyProduct = (prod: Product) => {
     const newId = prod.id + "-copy-" + Math.floor(Math.random() * 900 + 100);
     setEditingProduct(null); // Save as new unique entry
+    descriptionDraftRef.current = prod.description || "";
     setProductForm({
       ...prod,
       id: newId,
+      slug: "",
       name: prod.name + " (Bản sao)",
     });
     setIsToolbarPreviewMode(false);

@@ -64,7 +64,8 @@ export default function WebPConverterPage() {
     const newItems: ImageItem[] = [];
 
     for (const file of Array.from(files)) {
-      if (!allowed.includes(file.type)) continue;
+      const hasSupportedExtension = /\.(jpe?g|png|webp)$/i.test(file.name);
+      if (!allowed.includes(file.type.toLowerCase()) && !hasSupportedExtension) continue;
       try {
         const dataUrl = await fileToDataUrl(file);
         const dims = await getImageDimensions(dataUrl);
@@ -218,7 +219,7 @@ export default function WebPConverterPage() {
               Chuyển ảnh sang WebP
             </h1>
             <p className="mt-2 max-w-2xl text-xs leading-relaxed text-gray-400">
-              Chọn nhiều ảnh JPG/PNG, giảm dung lượng ngay trên trình duyệt rồi tải file WebP về máy.
+              Chọn nhiều ảnh JPG/PNG/WebP, giảm dung lượng ngay trên trình duyệt rồi tải file WebP về máy.
             </p>
           </div>
           <a href="/admin" className="inline-flex h-10 items-center justify-center border border-white/10 px-4 text-[11px] font-display font-bold uppercase tracking-widest text-gray-300 hover:border-gold-light hover:text-gold-light">
@@ -251,7 +252,7 @@ export default function WebPConverterPage() {
                 <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">
                   Kéo thả ảnh vào đây
                 </h2>
-                <p className="mt-2 text-xs leading-relaxed text-gray-500">Hỗ trợ JPG và PNG. Có thể chọn nhiều ảnh cùng lúc.</p>
+                <p className="mt-2 text-xs leading-relaxed text-gray-500">Hỗ trợ JPG, PNG và WebP. Có thể chọn nhiều ảnh cùng lúc.</p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -263,7 +264,7 @@ export default function WebPConverterPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".png,image/png,.jpg,.jpeg,image/jpeg"
+                  accept=".png,image/png,.jpg,.jpeg,image/jpeg,.webp,image/webp"
                   multiple
                   className="hidden"
                   onChange={(event) => {

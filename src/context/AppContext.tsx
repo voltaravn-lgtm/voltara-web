@@ -122,6 +122,24 @@ function sortCoursesNewestFirst(items: Course[]) {
   });
 }
 
+function omitUndefinedValues<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined)
+      .map((item) => omitUndefinedValues(item)) as T;
+  }
+
+  if (value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, omitUndefinedValues(item)])
+    ) as T;
+  }
+
+  return value;
+}
+
 const PUBLIC_FIRESTORE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 function shouldRefreshPublicFirestoreCache(key: string) {
@@ -162,8 +180,8 @@ interface AppContextType {
   setAcademyCourses: React.Dispatch<React.SetStateAction<Course[]>>;
   
   // Dynamic State Modifiers for Easy Administration
-  updateProduct: (product: Product) => void;
-  addProduct: (product: Product) => void;
+  updateProduct: (product: Product) => Promise<boolean>;
+  addProduct: (product: Product) => Promise<boolean>;
   deleteProduct: (id: string) => void;
   updateMenuItem: (index: number, updatedItem: MenuItem) => void;
   addMenuItem: (item: MenuItem) => void;
@@ -906,14 +924,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [cartItems]);
 
   const updateProduct = async (updatedProduct: Product) => {
-    const nextProduct = {
+    const nextProduct = omitUndefinedValues({
       ...updatedProduct,
       slug: updatedProduct.slug || getProductSlug(updatedProduct),
       createdAt: updatedProduct.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
-
-    setProducts(prev => sortProductsNewestFirst(prev.map(p => p.id === nextProduct.id ? nextProduct : p)));
+    });
 
     if (isFirebaseConfigured) {
       try {
@@ -921,35 +937,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (error) {
         console.error("Could not update product in Firestore:", error);
         showToast("Không thể lưu sản phẩm lên Firebase.", "error");
+        return false;
       }
     }
+
+    setProducts(prev => sortProductsNewestFirst(prev.map(p => p.id === nextProduct.id ? nextProduct : p)));
+    return true;
   };
 
   const addProduct = async (newProduct: Product) => {
-    const nextProduct = {
+    const nextProduct = omitUndefinedValues({
       ...newProduct,
       slug: newProduct.slug || getProductSlug(newProduct),
       createdAt: newProduct.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
-
-    setProducts(prev => {
-      // Avoid raw duplicates
-      if (prev.some(p => p.id === nextProduct.id)) {
-        showToast("ID Sản phẩm đã tồn tại!", "error");
-        return prev;
-      }
-      return sortProductsNewestFirst([nextProduct, ...prev]);
     });
 
-    if (isFirebaseConfigured && !products.some(p => p.id === nextProduct.id)) {
+    if (products.some(p => p.id === nextProduct.id)) {
+      showToast("ID Sản phẩm đã tồn tại!", "error");
+      return false;
+    }
+
+    if (isFirebaseConfigured) {
       try {
         await setDoc(doc(db, "products", nextProduct.id), nextProduct);
       } catch (error) {
         console.error("Could not add product to Firestore:", error);
         showToast("Không thể thêm sản phẩm lên Firebase.", "error");
+        return false;
       }
     }
+
+    setProducts(prev => sortProductsNewestFirst([nextProduct, ...prev]));
+    return true;
   };
 
   const deleteProduct = async (id: string) => {
