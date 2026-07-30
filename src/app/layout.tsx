@@ -3,6 +3,8 @@ import { Metadata } from "next";
 import Script from "next/script";
 import RootClientLayout from "./RootClientLayout";
 import MascotOverlay from "../components/MascotOverlay";
+import ProductSalesMascot from "../components/ProductSalesMascot";
+import OrderThankYouMascot from "../components/OrderThankYouMascot";
 import { buildMetadata, organizationJsonLd, siteName, siteUrl, websiteJsonLd } from "../lib/seo";
 import "../index.css";
 
@@ -63,6 +65,8 @@ export default function RootLayout({
         />
         <RootClientLayout>{children}</RootClientLayout>
         <MascotOverlay />
+        <ProductSalesMascot />
+        <OrderThankYouMascot />
       </body>
     </html>
   );

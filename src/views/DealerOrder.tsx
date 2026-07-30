@@ -10,6 +10,7 @@ import { DealerAccount, DealerOrderRecord, Product } from '../types';
 import { auth, db } from '../lib/firebase';
 import { isAdminEmail } from '../lib/adminAuth';
 import { VIETNAM_LOCATIONS } from '../lib/vietnamLocations';
+import { announceOrderSuccess } from '../lib/orderSuccess';
 
 const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 const parsePrice = (value?: string) => Number(String(value || '').replace(/[^0-9]/g, '')) || 0;
@@ -276,6 +277,7 @@ export default function DealerOrder() {
       setQuantities({});
       setIsCheckoutOpen(false);
       showToast('Đã gửi đơn hàng. Bộ phận Sale sẽ liên hệ xác nhận.', 'success');
+      announceOrderSuccess('dealer');
     } catch (error) {
       console.error('Could not create dealer order:', error);
       showToast('Không thể gửi đơn hàng. Vui lòng kiểm tra Firestore Rules.', 'error');

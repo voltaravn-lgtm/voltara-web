@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { X, Send, ShoppingCart, ShieldCheck, MapPin, Phone, User, FileText, Minus, Plus } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { QuoteRequest } from "../types";
+import { announceOrderSuccess } from "../lib/orderSuccess";
 
 interface OrderRequestModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export default function OrderRequestModal({ isOpen, onClose, productName, varian
     addQuoteRequest(newRequest);
     setIsSuccess(true);
     showToast(`Đã tiếp nhận đơn đặt hàng cho "${productName}".`, "success");
+    announceOrderSuccess("product");
 
     setTimeout(() => {
       setForm({

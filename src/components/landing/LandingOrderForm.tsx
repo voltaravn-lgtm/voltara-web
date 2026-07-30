@@ -3,6 +3,7 @@ import React, { FormEvent, useMemo, useState } from 'react';
 import { CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
 import { Product } from '../../types';
 import { ComboLandingBlock, LandingPage, OrderFormLandingBlock } from '../../types/landing';
+import { announceOrderSuccess } from '../../lib/orderSuccess';
 
 interface FormItem { productId: string; variantId?: string; quantity: number; }
 const newRequestId = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -29,6 +30,7 @@ export default function LandingOrderForm({ block, page, products, editorMode }: 
       const completed = { orderCode: result.orderCode, total: result.total || 0, currency: result.currency || 'VND', items };
       setSuccess(completed);
       window.dispatchEvent(new CustomEvent('voltara:landing-order-success', { detail: { formType: type, total: completed.total, currency: completed.currency, orderCode: completed.orderCode, items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })) } }));
+      if (type === 'order') announceOrderSuccess('landing');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Không thể gửi đơn hàng.'); } finally { setSubmitting(false); }
   };
   if (success) return <div id="dat-hang" className="mx-auto max-w-2xl border border-emerald-500/30 bg-emerald-500/5 p-7 text-center"><CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" /><h2 className="mt-4 text-2xl font-black uppercase">{type === 'order' ? 'Đặt hàng thành công' : 'Đăng ký thành công'}</h2><p className="mt-3 opacity-65">{block.successMessage || 'Voltara sẽ liên hệ xác nhận sớm nhất.'}</p><p className="mt-4 text-sm">Mã yêu cầu: <strong className="text-xl text-[var(--landing-primary)]">{success.orderCode}</strong></p>{type === 'order' && <><div className="mx-auto mt-5 max-w-md divide-y divide-current/10 border-y border-current/10 text-left">{success.items.map((item, index) => { const product = products.find((entry) => entry.id === item.productId); return <div key={`${item.productId}-${index}`} className="flex justify-between gap-3 py-3 text-xs"><span>{product?.name || item.productId}</span><b>× {item.quantity}</b></div>; })}</div><p className="mt-5 text-sm">Tổng tiền: <strong className="text-xl text-[var(--landing-primary)]">{new Intl.NumberFormat('vi-VN').format(success.total)}đ</strong></p></>}<button type="button" onClick={reset} className="landing-button mt-6 inline-flex items-center gap-2 px-5 py-3 text-xs font-black uppercase"><RotateCcw className="h-4 w-4" />Tạo yêu cầu mới</button></div>;

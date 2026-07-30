@@ -4,6 +4,7 @@ import { Minus, Plus, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { getProductHref } from "../lib/productRoutes";
 import { VIETNAM_LOCATIONS } from "../lib/vietnamLocations";
+import { announceOrderSuccess } from "../lib/orderSuccess";
 
 export default function CartDrawer() {
   const {
@@ -111,6 +112,7 @@ export default function CartDrawer() {
     setIsCheckoutOpen(false);
     closeCart();
     showToast("Đã gửi đơn hàng từ giỏ hàng vào admin.", "success");
+    announceOrderSuccess("cart");
   };
 
   return (
