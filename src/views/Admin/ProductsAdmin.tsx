@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ProductCategory, useApp } from "../../context/AppContext";
 import { Product, ProductVariant, ProductCombo } from "../../types";
 import { uploadImageToCloudinary, isCloudinaryConfigured } from "../../lib/cloudinary";
-import { collection, getDocs, limit, query } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../../lib/firebase";
 import { getProductSlug, slugifyProductText } from "../../lib/productRoutes";
 import { cleanVideoUrls, getProductVideoEmbed } from "../../lib/video";
@@ -331,13 +331,11 @@ export default function ProductsAdmin() {
     if (!isFirebaseConfigured || hasSyncedProductPreviewRef.current) return;
     hasSyncedProductPreviewRef.current = true;
     let cancelled = false;
-    getDocs(query(collection(db, "products"), limit(20))).then((snapshot) => {
-      if (cancelled || snapshot.empty) return;
+    getDocs(collection(db, "products")).then((snapshot) => {
+      if (cancelled) return;
       const remoteItems = snapshot.docs.map((item) => item.data() as Product);
-      setProducts((current) => {
-        const merged = new Map(current.map((item) => [item.id, item]));
-        remoteItems.forEach((item) => merged.set(item.id, item));
-        return [...merged.values()].sort((a, b) => {
+      setProducts(() => {
+        return remoteItems.sort((a, b) => {
           const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return bTime - aTime || String(b.id).localeCompare(String(a.id), "vi");

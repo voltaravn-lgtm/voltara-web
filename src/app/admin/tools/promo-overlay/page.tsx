@@ -5,7 +5,7 @@ import { Calendar, Download, Eraser, ImagePlus, Layers, Maximize2, Move, Palette
 import { useApp } from "../../../../context/AppContext";
 import { isCloudinaryConfigured, uploadImageToCloudinary } from "../../../../lib/cloudinary";
 
-type ExportSize = 800 | 1000 | 1200;
+type ExportSize = "original" | 800 | 1000 | 1200;
 type BackgroundMode = "white" | "transparent" | "custom";
 
 interface ImageAsset {
@@ -116,14 +116,14 @@ export default function PromoOverlayPage(): React.ReactElement {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const drawBackground = (ctx: CanvasRenderingContext2D, size: number, preview = false) => {
-    ctx.clearRect(0, 0, size, size);
+  const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height = width, preview = false) => {
+    ctx.clearRect(0, 0, width, height);
 
     if (backgroundMode === "transparent") {
       if (!preview) return;
-      const block = size / 20;
-      for (let y = 0; y < size; y += block) {
-        for (let x = 0; x < size; x += block) {
+      const block = Math.min(width, height) / 20;
+      for (let y = 0; y < height; y += block) {
+        for (let x = 0; x < width; x += block) {
           ctx.fillStyle = (Math.floor(x / block) + Math.floor(y / block)) % 2 === 0 ? "#f7f7f7" : "#dedede";
           ctx.fillRect(x, y, block, block);
         }
@@ -132,18 +132,19 @@ export default function PromoOverlayPage(): React.ReactElement {
     }
 
     ctx.fillStyle = backgroundMode === "custom" ? customBackground : "#ffffff";
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, width, height);
   };
 
-  const drawProduct = (ctx: CanvasRenderingContext2D, product: ProductItem, img: HTMLImageElement, size: number) => {
-    const base = computeInitialFitScale(product.width, product.height);
+  const drawProduct = (ctx: CanvasRenderingContext2D, product: ProductItem, img: HTMLImageElement, width: number, height = width) => {
+    const base = Math.min(width / product.width, height / product.height);
     const displayScale = base * product.scale;
     const drawW = Math.round(product.width * displayScale);
     const drawH = Math.round(product.height * displayScale);
-    const xPreview = Math.round((PREVIEW_CANVAS_SIZE - drawW) / 2 + product.offset.x);
-    const yPreview = Math.round((PREVIEW_CANVAS_SIZE - drawH) / 2 + product.offset.y);
-    const scaleOut = size / PREVIEW_CANVAS_SIZE;
-    ctx.drawImage(img, Math.round(xPreview * scaleOut), Math.round(yPreview * scaleOut), Math.round(drawW * scaleOut), Math.round(drawH * scaleOut));
+    const offsetX = product.offset.x * (width / PREVIEW_CANVAS_SIZE);
+    const offsetY = product.offset.y * (height / PREVIEW_CANVAS_SIZE);
+    const x = Math.round((width - drawW) / 2 + offsetX);
+    const y = Math.round((height - drawH) / 2 + offsetY);
+    ctx.drawImage(img, x, y, drawW, drawH);
   };
 
   const renderPreview = () => {
@@ -151,7 +152,7 @@ export default function PromoOverlayPage(): React.ReactElement {
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    drawBackground(ctx, PREVIEW_CANVAS_SIZE, true);
+    drawBackground(ctx, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE, true);
 
     if (!activeProduct) {
       ctx.fillStyle = "#8A8A8A";
@@ -172,7 +173,7 @@ export default function PromoOverlayPage(): React.ReactElement {
     img.src = activeProduct.url;
     img.onload = () => {
       productImgRefs.current.set(activeProduct.id, img);
-      drawBackground(ctx, PREVIEW_CANVAS_SIZE, true);
+      drawBackground(ctx, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE, true);
       drawProduct(ctx, activeProduct, img, PREVIEW_CANVAS_SIZE);
       if (overlay && overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE);
     };
@@ -410,17 +411,19 @@ export default function PromoOverlayPage(): React.ReactElement {
   };
 
   const generateExportCanvas = (size: ExportSize, product: ProductItem) => {
+    const width = size === "original" ? product.width : size;
+    const height = size === "original" ? product.height : size;
     const out = document.createElement("canvas");
-    out.width = size;
-    out.height = size;
+    out.width = width;
+    out.height = height;
     const ctx = out.getContext("2d");
     if (!ctx) throw new Error("Không tạo được canvas.");
 
-    drawBackground(ctx, size);
+    drawBackground(ctx, width, height);
 
     const productImg = productImgRefs.current.get(product.id);
-    if (productImg) drawProduct(ctx, product, productImg, size);
-    if (overlay && overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, size, size);
+    if (productImg) drawProduct(ctx, product, productImg, width, height);
+    if (overlay && overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, width, height);
 
     return out;
   };
@@ -735,9 +738,10 @@ export default function PromoOverlayPage(): React.ReactElement {
                   <span className="block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Kích thước xuất</span>
                   <select
                     value={exportSize}
-                    onChange={(e) => setExportSize(Number(e.target.value) as ExportSize)}
+                    onChange={(e) => setExportSize(e.target.value === "original" ? "original" : (Number(e.target.value) as ExportSize))}
                     className="h-10 w-full border border-white/10 bg-black px-3 text-xs font-mono text-white outline-none focus:border-gold-light"
                   >
+                    <option value="original">Kích thước gốc</option>
                     <option value={800}>800 x 800</option>
                     <option value={1000}>1000 x 1000</option>
                     <option value={1200}>1200 x 1200</option>
@@ -808,7 +812,13 @@ export default function PromoOverlayPage(): React.ReactElement {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">Xem trước</h2>
-                <p className="mt-1 text-[11px] text-gray-500">{exportSize} x {exportSize}px</p>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  {exportSize === "original"
+                    ? activeProduct
+                      ? `${activeProduct.width} x ${activeProduct.height}px (gốc)`
+                      : "Kích thước gốc"
+                    : `${exportSize} x ${exportSize}px`}
+                </p>
               </div>
               <span className={classNames("rounded-sm px-2 py-1 text-[10px] font-display font-bold uppercase tracking-widest", activeProduct ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-gray-500")}>
                 {activeProduct ? "Sẵn sàng" : "Chưa có ảnh"}

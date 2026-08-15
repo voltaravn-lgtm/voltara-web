@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, setDoc, writeBatch } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc, writeBatch } from "firebase/firestore";
 import { Product, ProductVariant, ProductCombo, SalesProgram, Solution, Article, Branch, Dealer, HomeContent, AboutContent, Job, ContactSubmission, WarrantyRecord, ToastMessage, QuoteRequest, Course, CartItem } from "../types";
 import { getProductSlug } from "../lib/productRoutes";
 import { PRODUCTS_DATA, SOLUTIONS_DATA, ARTICLES_DATA, BRANCHES_DATA, DEALERS_DATA, JOBS_DATA, COURSES_DATA } from "../data";
@@ -777,16 +777,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       try {
-        if (shouldRefreshPublicFirestoreCache("voltara_products_last_firestore_sync")) {
-          const snapshot = await getDocs(query(collection(db, "products"), limit(24)));
-          if (!cancelled && !snapshot.empty) {
-            const items = sortProductsNewestFirst(snapshot.docs.map((item) => item.data() as Product));
-            setProducts((current) => {
-              const merged = new Map(current.map((item) => [item.id, item]));
-              items.forEach((item) => merged.set(item.id, item));
-              return sortProductsNewestFirst([...merged.values()]);
-            });
-            localStorage.setItem("voltara_products_last_firestore_sync", String(Date.now()));
+        if (shouldRefreshPublicFirestoreCache("voltara_products_last_firestore_sync_v2")) {
+          const response = await fetch("/api/products");
+          if (!response.ok) throw new Error(`Product catalog request failed with ${response.status}`);
+
+          const data = await response.json() as { products?: Product[]; source?: "firestore" | "fallback" };
+          if (!cancelled && data.source === "firestore" && Array.isArray(data.products)) {
+            setProducts(sortProductsNewestFirst(data.products));
+            localStorage.setItem("voltara_products_last_firestore_sync_v2", String(Date.now()));
           }
         }
 
