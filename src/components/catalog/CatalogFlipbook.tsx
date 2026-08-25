@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import React, { forwardRef, useCallback, useEffect, useRef, useState } from "react";
-import type { CatalogDefinition, CatalogPage as CatalogPageData } from "@/src/lib/catalog/catalogConfig";
+import type { CatalogDefinition, CatalogPage as CatalogPageData } from "@/src/types/catalog";
 import CatalogToolbar, { type CatalogViewMode } from "./CatalogToolbar";
 import styles from "./catalog.module.css";
 
@@ -83,9 +83,18 @@ export default function CatalogFlipbook({ catalog }: CatalogFlipbookProps) {
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const bookRef = useRef<FlipBookHandle | null>(null);
+  const bookViewportRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollPageRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const mousePanRef = useRef({
+    active: false,
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
 
   const totalPages = catalog.pages.length;
   const currentPage = Math.min(currentPageIndex + 1, totalPages);
@@ -209,6 +218,19 @@ export default function CatalogFlipbook({ catalog }: CatalogFlipbookProps) {
     };
   }, [catalog.pages, currentPageIndex, totalPages, viewMode]);
 
+  useEffect(() => {
+    if (viewMode !== "flip") return;
+    const viewport = bookViewportRef.current;
+    if (!viewport) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollLeft = Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
+      viewport.scrollTop = Math.max(0, (viewport.scrollHeight - viewport.clientHeight) / 2);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [catalogSize, viewMode, zoom]);
+
   const handleFlip = useCallback((event: FlipEvent) => {
     setCurrentPageIndex(event.data);
     playFlipSound();
@@ -229,6 +251,38 @@ export default function CatalogFlipbook({ catalog }: CatalogFlipbookProps) {
       }
     } catch {
       setIsFullscreen(false);
+    }
+  }, []);
+
+  const startMousePan = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (zoom <= 1 || event.pointerType !== "mouse") return;
+    const viewport = event.currentTarget;
+    mousePanRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+    viewport.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }, [zoom]);
+
+  const moveMousePan = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = mousePanRef.current;
+    if (!pan.active || pan.pointerId !== event.pointerId) return;
+    event.currentTarget.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
+    event.currentTarget.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+    event.preventDefault();
+  }, []);
+
+  const stopMousePan = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = mousePanRef.current;
+    if (!pan.active || pan.pointerId !== event.pointerId) return;
+    mousePanRef.current.active = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }, []);
 
@@ -262,10 +316,25 @@ export default function CatalogFlipbook({ catalog }: CatalogFlipbookProps) {
 
       {viewMode === "flip" ? (
         <>
-          <div className={styles.bookViewport} style={{ width: catalogSize.bookWidth, height: catalogSize.pageHeight }}>
-            <div className={styles.bookScaler} style={{ width: catalogSize.bookWidth, height: catalogSize.pageHeight, transform: `scale(${zoom})` }}>
+          <div
+            ref={bookViewportRef}
+            className={`${styles.bookViewport} ${zoom > 1 ? styles.bookViewportZoomed : ""}`}
+            style={{ width: catalogSize.bookWidth, height: catalogSize.pageHeight }}
+            onPointerDown={startMousePan}
+            onPointerMove={moveMousePan}
+            onPointerUp={stopMousePan}
+            onPointerCancel={stopMousePan}
+          >
+            <div
+              className={`${styles.zoomCanvas} ${zoom <= 1 ? styles.zoomCanvasFitted : ""}`}
+              style={{
+                width: catalogSize.bookWidth * zoom,
+                height: catalogSize.pageHeight * zoom,
+              }}
+            >
+              <div className={styles.bookScaler} style={{ width: catalogSize.bookWidth, height: catalogSize.pageHeight, transform: `scale(${zoom})` }}>
               <HTMLFlipBook
-                key={`${catalogSize.pageWidth}-${catalogSize.pageHeight}-${catalogSize.isMobile ? "portrait" : "landscape"}`}
+                key={`${catalogSize.pageWidth}-${catalogSize.pageHeight}-${catalogSize.isMobile ? "portrait" : "landscape"}-${zoom > 1 ? "pan" : "flip"}`}
                 ref={bookRef}
                 className={styles.book}
                 style={{}}
@@ -284,9 +353,9 @@ export default function CatalogFlipbook({ catalog }: CatalogFlipbookProps) {
                 autoSize={false}
                 maxShadowOpacity={0.35}
                 showCover={false}
-                mobileScrollSupport
+                mobileScrollSupport={zoom <= 1}
                 clickEventForward
-                useMouseEvents
+                useMouseEvents={zoom <= 1}
                 swipeDistance={24}
                 showPageCorners
                 disableFlipByClick={false}
@@ -296,6 +365,7 @@ export default function CatalogFlipbook({ catalog }: CatalogFlipbookProps) {
                   <CatalogPage key={page.id} page={page} pageNumber={index + 1} shouldLoad={Math.abs(index - currentPageIndex) <= 3 || index <= 1} />
                 ))}
               </HTMLFlipBook>
+              </div>
             </div>
           </div>
 

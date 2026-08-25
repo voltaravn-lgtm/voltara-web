@@ -18,17 +18,45 @@
 }
 
 .bookViewport {
-  display: grid;
+  display: flex;
   max-width: calc(100vw - 2rem);
   flex: none;
-  place-items: center;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  scrollbar-width: none;
+}
+
+.bookViewport::-webkit-scrollbar {
+  display: none;
+}
+
+.bookViewportZoomed {
+  overflow: auto;
+  cursor: grab;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y pinch-zoom;
+  user-select: none;
+}
+
+.bookViewportZoomed:active {
+  cursor: grabbing;
+}
+
+.zoomCanvas {
+  display: grid;
+  flex: none;
+  place-items: start;
+}
+
+.zoomCanvasFitted {
+  margin: auto;
 }
 
 .bookScaler {
   display: grid;
   place-items: center;
-  transform-origin: center center;
+  transform-origin: top left;
   transition: transform 220ms ease;
 }
 
