@@ -766,17 +766,33 @@ export default function PromoOverlayPage(): React.ReactElement {
                   <h2 className="font-display text-xs font-black uppercase tracking-widest text-white">Danh sách ảnh sản phẩm</h2>
                   <span className="text-[11px] text-gray-500">{products.length} ảnh</span>
                 </div>
-                <div className="mb-3 flex justify-end">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                  <label>
+                    <span className="sr-only">Chọn ảnh cần chỉnh</span>
+                    <select
+                      value={activeProduct?.id || ""}
+                      onChange={(event) => setActiveProductId(event.target.value)}
+                      className="h-10 w-full border border-gold-dark/35 bg-black px-3 text-xs font-mono text-white outline-none focus:border-gold-light"
+                    >
+                      {products.map((item, index) => (
+                        <option key={item.id} value={item.id}>Ảnh {index + 1} — {item.file.name}</option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     type="button"
                     onClick={clearProducts}
-                    className="inline-flex h-8 items-center justify-center gap-1.5 border border-red-500/25 px-3 text-[10px] font-display font-bold uppercase tracking-widest text-red-300 transition-colors hover:border-red-400 hover:bg-red-500 hover:text-white"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 border border-red-500/25 px-3 text-[10px] font-display font-bold uppercase tracking-widest text-red-300 transition-colors hover:border-red-400 hover:bg-red-500 hover:text-white"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Xóa tất cả
                   </button>
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <details className="mt-3 border border-white/5 bg-black/30">
+                  <summary className="cursor-pointer px-3 py-2.5 text-[10px] font-display font-bold uppercase tracking-widest text-gray-400 hover:text-gold-light">
+                    Mở danh sách thu nhỏ để xem hoặc xóa từng ảnh
+                  </summary>
+                  <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto border-t border-white/5 p-2 sm:grid-cols-2">
                   {products.map((item, index) => (
                     <button
                       key={item.id}
@@ -812,7 +828,8 @@ export default function PromoOverlayPage(): React.ReactElement {
                       </span>
                     </button>
                   ))}
-                </div>
+                  </div>
+                </details>
               </div>
             )}
 
@@ -822,8 +839,7 @@ export default function PromoOverlayPage(): React.ReactElement {
                 Tùy chỉnh xuất ảnh
               </div>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
-                <ControlRange label="Phóng to ảnh" value={activeProduct?.scale || 1} min={0.25} max={2} step={0.01} display={(activeProduct?.scale || 1).toFixed(2)} onChange={(value) => updateActiveProduct({ scale: value })} disabled={!activeProduct} />
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Kích thước xuất</span>
                   <select
@@ -932,7 +948,7 @@ export default function PromoOverlayPage(): React.ReactElement {
             </div>
           </section>
 
-          <section className="border border-gold-dark/30 bg-[#0B0B0B] p-4 sm:p-5">
+          <section className="border border-gold-dark/30 bg-[#0B0B0B] p-4 sm:p-5 lg:sticky lg:top-24 lg:self-start">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-sm font-black uppercase tracking-widest text-white">Xem trước</h2>
@@ -962,6 +978,49 @@ export default function PromoOverlayPage(): React.ReactElement {
                   className={classNames("absolute inset-0 h-full w-full touch-none", Boolean(activeProduct) && "cursor-move")}
                 />
               </div>
+            </div>
+
+            <div className="mt-4 border border-gold-dark/25 bg-black/50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-display font-bold uppercase tracking-widest text-gold-light">
+                  <Move className="h-4 w-4" />
+                  Chỉnh ảnh đang xem
+                </div>
+                {activeProduct && (
+                  <span className="text-[10px] font-mono text-gray-500">
+                    Ảnh {products.findIndex((item) => item.id === activeProduct.id) + 1}/{products.length}
+                  </span>
+                )}
+              </div>
+
+              <label className="mb-4 block">
+                <span className="mb-2 block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Chọn nhanh ảnh cần chỉnh</span>
+                <select
+                  value={activeProduct?.id || ""}
+                  onChange={(event) => setActiveProductId(event.target.value)}
+                  disabled={!products.length}
+                  className="h-10 w-full border border-white/10 bg-black px-3 text-xs font-mono text-white outline-none focus:border-gold-light disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {!products.length && <option value="">Chưa có ảnh sản phẩm</option>}
+                  {products.map((item, index) => (
+                    <option key={item.id} value={item.id}>Ảnh {index + 1} — {item.file.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <ControlRange
+                label="Phóng to / thu nhỏ"
+                value={activeProduct?.scale || 1}
+                min={0.25}
+                max={2}
+                step={0.01}
+                display={`${Math.round((activeProduct?.scale || 1) * 100)}%`}
+                onChange={(value) => updateActiveProduct({ scale: value })}
+                disabled={!activeProduct}
+              />
+              <p className="mt-3 text-[10px] leading-relaxed text-gray-500">
+                Kéo trực tiếp ảnh trong khung xem trước để đổi vị trí. Mức phóng và vị trí được lưu riêng cho từng ảnh.
+              </p>
             </div>
           </section>
         </div>
