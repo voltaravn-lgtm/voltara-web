@@ -283,8 +283,19 @@ export default function PromoOverlayPage(): React.ReactElement {
     .replace(/[^a-z0-9]/gi, "")
     .toLowerCase();
 
+  const findExactCatalogProducts = (value: string) => {
+    const matchKey = normalizeProductMatchKey(value);
+    if (!matchKey) return [];
+    return catalogProducts.filter((product) =>
+      [product.id, product.sku, product.barcode].some((code) => code && normalizeProductMatchKey(code) === matchKey)
+    );
+  };
+
   const getFileImagePosition = (fileName: string) => {
     const baseName = fileName.replace(/\.[^/.]+$/, "");
+    if (findExactCatalogProducts(baseName).length === 1) {
+      return { productName: baseName, order: 0 };
+    }
     const suffixMatch = baseName.match(/^(.*?)-(\d+)$/);
     return {
       productName: suffixMatch?.[1] || baseName,
@@ -297,16 +308,15 @@ export default function PromoOverlayPage(): React.ReactElement {
   const findCatalogProductForFile = (fileName: string) => {
     const fileKey = normalizeProductMatchKey(getFileImagePosition(fileName).productName);
     if (!fileKey) return undefined;
-    const exactMatch = catalogProducts.find((product) =>
-      [product.id, product.sku, product.barcode].some((value) => value && normalizeProductMatchKey(value) === fileKey)
-    );
-    if (exactMatch || fileKey.length < 4) return exactMatch;
+    const exactMatches = findExactCatalogProducts(fileKey);
+    if (exactMatches.length === 1 || fileKey.length < 4) return exactMatches[0];
+    if (exactMatches.length > 1) return undefined;
 
     const prefixMatches = catalogProducts.filter((product) =>
       [product.id, product.sku, product.barcode].some((value) => {
         if (!value) return false;
         const productKey = normalizeProductMatchKey(value);
-        return productKey.startsWith(fileKey) || fileKey.startsWith(productKey);
+        return Boolean(productKey) && (productKey.startsWith(fileKey) || fileKey.startsWith(productKey));
       })
     );
     return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
@@ -693,7 +703,14 @@ export default function PromoOverlayPage(): React.ReactElement {
       for (const [targetId, entries] of filenameGroups.entries()) {
         const primaryCount = entries.filter((entry) => entry.order === 0).length;
         if (publishMode !== "gallery-by-filename" && primaryCount !== 1) {
-          showToast("Mỗi mã sản phẩm phải có đúng một ảnh đại diện không chứa hậu tố -1, -2...", "warning");
+          const target = catalogProducts.find((item) => item.id === targetId);
+          const fileNames = entries.map((entry) => products[entry.index]?.file.name).filter(Boolean).join(", ");
+          showToast(
+            primaryCount === 0
+              ? `“${target?.sku || target?.id || targetId}” chưa có ảnh chính. File đang ghép: ${fileNames}.`
+              : `“${target?.sku || target?.id || targetId}” đang có ${primaryCount} ảnh chính: ${fileNames}.`,
+            "warning",
+          );
           return;
         }
         if (publishMode === "gallery-by-filename" && primaryCount > 0) {
