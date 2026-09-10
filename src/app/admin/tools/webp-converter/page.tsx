@@ -26,12 +26,17 @@ interface WritableFileStreamLike {
 }
 
 interface FileHandleLike {
+  kind: "file";
+  name: string;
+  getFile(): Promise<File>;
   createWritable(): Promise<WritableFileStreamLike>;
 }
 
 interface DirectoryHandleLike {
+  kind: "directory";
   name: string;
   getFileHandle(name: string, options: { create: true }): Promise<FileHandleLike>;
+  entries(): AsyncIterableIterator<[string, FileHandleLike | DirectoryHandleLike]>;
 }
 
 interface DirectoryPickerWindow extends Window {
@@ -60,6 +65,7 @@ export default function WebPConverterPage() {
   const [resize, setResize] = useState<ResizeOption>("original");
   const [dragging, setDragging] = useState(false);
   const [saveDirectoryHandle, setSaveDirectoryHandle] = useState<DirectoryHandleLike | null>(null);
+  const [sourceDirectoryHandle, setSourceDirectoryHandle] = useState<DirectoryHandleLike | null>(null);
   const [saveDirectoryError, setSaveDirectoryError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const itemsRef = useRef<ImageItem[]>([]);
@@ -77,7 +83,7 @@ export default function WebPConverterPage() {
     };
   }, []);
 
-  const handleFiles = async (files: FileList | null) => {
+  const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
 
     const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -181,7 +187,10 @@ export default function WebPConverterPage() {
     }
   };
 
-  const getOutputFileName = (item: ImageItem) => `${item.name.replace(/\.[^/.]+$/, "")}.webp`;
+  const getOutputFileName = (item: ImageItem) => {
+    const baseName = item.name.replace(/\.[^/.]+$/, "");
+    return /\.webp$/i.test(item.name) ? `${baseName}-converted.webp` : `${baseName}.webp`;
+  };
 
   const selectSaveDirectory = async () => {
     const pickerWindow = window as DirectoryPickerWindow;
@@ -197,6 +206,36 @@ export default function WebPConverterPage() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setSaveDirectoryError(error instanceof Error ? error.message : "Không thể mở cửa sổ chọn thư mục.");
+    }
+  };
+
+  const selectSourceFolderAndLoad = async () => {
+    const pickerWindow = window as DirectoryPickerWindow;
+    if (!pickerWindow.showDirectoryPicker) {
+      setSaveDirectoryError("Trình duyệt không hỗ trợ đọc thư mục. Hãy dùng Chrome, Edge hoặc Cốc Cốc phiên bản mới.");
+      return;
+    }
+
+    try {
+      const directory = await pickerWindow.showDirectoryPicker();
+      const imageFiles: File[] = [];
+      for await (const [name, handle] of directory.entries()) {
+        if (handle.kind === "file" && /\.(jpe?g|png|webp)$/i.test(name)) {
+          imageFiles.push(await handle.getFile());
+        }
+      }
+      imageFiles.sort((a, b) => a.name.localeCompare(b.name, "vi", { numeric: true }));
+      if (!imageFiles.length) {
+        setSaveDirectoryError(`Thư mục “${directory.name}” không có ảnh JPG, PNG hoặc WebP.`);
+        return;
+      }
+      setSourceDirectoryHandle(directory);
+      setSaveDirectoryHandle(directory);
+      setSaveDirectoryError("");
+      await handleFiles(imageFiles);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setSaveDirectoryError(error instanceof Error ? error.message : "Không thể đọc ảnh trong thư mục.");
     }
   };
 
@@ -329,6 +368,14 @@ export default function WebPConverterPage() {
                 >
                   <Upload className="h-4 w-4" />
                   Chọn ảnh
+                </button>
+                <button
+                  type="button"
+                  onClick={selectSourceFolderAndLoad}
+                  className="mt-2 inline-flex min-h-10 items-center justify-center gap-2 border border-white/10 px-4 py-2 text-[10px] font-display font-bold uppercase tracking-wider text-gray-300 hover:border-gold-light hover:text-gold-light"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  {sourceDirectoryHandle ? `Thư mục nguồn: ${sourceDirectoryHandle.name}` : "Chọn thư mục ảnh & lưu tại đây"}
                 </button>
                 <input
                   ref={fileInputRef}
