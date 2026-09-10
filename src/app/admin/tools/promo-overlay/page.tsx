@@ -7,7 +7,7 @@ import { isCloudinaryConfigured, uploadImageToCloudinary } from "../../../../lib
 
 type ExportSize = "original" | 800 | 1000 | 1200;
 type BackgroundMode = "white" | "transparent" | "custom";
-type ProductPublishMode = "primary-bulk" | "replace-all";
+type ProductPublishMode = "filename-bulk" | "primary-bulk" | "replace-all";
 
 interface ImageAsset {
   file: File;
@@ -102,7 +102,7 @@ export default function PromoOverlayPage(): React.ReactElement {
   const [exportBaseName, setExportBaseName] = useState("may-khoan-qzj005");
   const [preserveOriginalNames, setPreserveOriginalNames] = useState(false);
   const [saveDirectoryHandle, setSaveDirectoryHandle] = useState<DirectoryHandleLike | null>(null);
-  const [publishMode, setPublishMode] = useState<ProductPublishMode>("primary-bulk");
+  const [publishMode, setPublishMode] = useState<ProductPublishMode>("filename-bulk");
   const [bulkProductTargets, setBulkProductTargets] = useState<Record<string, string>>({});
   const [replaceAllProductId, setReplaceAllProductId] = useState("");
   const [publishingProducts, setPublishingProducts] = useState(false);
@@ -269,8 +269,17 @@ export default function PromoOverlayPage(): React.ReactElement {
     .replace(/[^a-z0-9]/gi, "")
     .toLowerCase();
 
+  const getFileImagePosition = (fileName: string) => {
+    const baseName = fileName.replace(/\.[^/.]+$/, "");
+    const suffixMatch = baseName.match(/^(.*?)-(\d+)$/);
+    return {
+      productName: suffixMatch?.[1] || baseName,
+      order: suffixMatch ? Number(suffixMatch[2]) : 0,
+    };
+  };
+
   const findCatalogProductForFile = (fileName: string) => {
-    const fileKey = normalizeProductMatchKey(fileName);
+    const fileKey = normalizeProductMatchKey(getFileImagePosition(fileName).productName);
     if (!fileKey) return undefined;
     const exactMatch = catalogProducts.find((product) =>
       [product.id, product.sku, product.barcode].some((value) => value && normalizeProductMatchKey(value) === fileKey)
@@ -635,7 +644,37 @@ export default function PromoOverlayPage(): React.ReactElement {
       return;
     }
 
-    if (publishMode === "primary-bulk") {
+    const filenameGroups = new Map<string, Array<{ index: number; order: number }>>();
+
+    if (publishMode === "filename-bulk") {
+      const missingTargets = products.filter((item) => !bulkProductTargets[item.id]);
+      if (missingTargets.length) {
+        showToast(`Còn ${missingTargets.length} ảnh chưa nhận diện được mã sản phẩm.`, "warning");
+        return;
+      }
+
+      products.forEach((item, index) => {
+        const targetId = bulkProductTargets[item.id];
+        const group = filenameGroups.get(targetId) || [];
+        group.push({ index, order: getFileImagePosition(item.file.name).order });
+        filenameGroups.set(targetId, group);
+      });
+
+      for (const entries of filenameGroups.values()) {
+        const primaryCount = entries.filter((entry) => entry.order === 0).length;
+        if (primaryCount !== 1) {
+          showToast("Mỗi mã sản phẩm phải có đúng một ảnh đại diện không chứa hậu tố -1, -2...", "warning");
+          return;
+        }
+        const orders = entries.map((entry) => entry.order);
+        if (new Set(orders).size !== orders.length) {
+          showToast("Một sản phẩm đang có ảnh trùng số thứ tự hậu tố.", "warning");
+          return;
+        }
+      }
+
+      if (!window.confirm(`Đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm theo mã file? Ảnh không có hậu tố sẽ là ảnh đại diện.`)) return;
+    } else if (publishMode === "primary-bulk") {
       const missingTargets = products.filter((item) => !bulkProductTargets[item.id]);
       if (missingTargets.length) {
         showToast(`Còn ${missingTargets.length} ảnh chưa chọn sản phẩm đích.`, "warning");
@@ -670,7 +709,28 @@ export default function PromoOverlayPage(): React.ReactElement {
         uploadedUrls.push(await uploadImageToCloudinary(file));
       }
 
-      if (publishMode === "primary-bulk") {
+      if (publishMode === "filename-bulk") {
+        let updatedCount = 0;
+        for (const [targetId, entries] of filenameGroups.entries()) {
+          const target = catalogProducts.find((item) => item.id === targetId);
+          if (!target) throw new Error("Không tìm thấy một sản phẩm đã nhận diện.");
+          const primary = entries.find((entry) => entry.order === 0);
+          if (!primary) throw new Error(`Sản phẩm “${target.name}” thiếu ảnh đại diện.`);
+          const galleryUrls = entries
+            .filter((entry) => entry.order > 0)
+            .sort((a, b) => a.order - b.order)
+            .map((entry) => uploadedUrls[entry.index]);
+          updatedCount += 1;
+          setPublishProgress(`Đang cập nhật sản phẩm ${updatedCount}/${filenameGroups.size}...`);
+          const updated = await updateProduct({
+            ...target,
+            image: uploadedUrls[primary.index],
+            images: galleryUrls,
+          });
+          if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
+        }
+        showToast(`Đã đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm theo đúng mã file.`, "success");
+      } else if (publishMode === "primary-bulk") {
         for (let index = 0; index < products.length; index += 1) {
           const target = catalogProducts.find((item) => item.id === bulkProductTargets[products[index].id]);
           if (!target) throw new Error(`Không tìm thấy sản phẩm cho ảnh ${index + 1}.`);
@@ -1089,15 +1149,21 @@ export default function PromoOverlayPage(): React.ReactElement {
                 Đăng trực tiếp các ảnh đã ghép khung lên Cloudinary và cập nhật sản phẩm. Hãy kiểm tra sản phẩm đích trước khi xác nhận.
               </p>
 
-              <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <ModeButton active={publishMode === "filename-bulk"} label="Đăng theo mã file" onClick={() => setPublishMode("filename-bulk")} />
                 <ModeButton active={publishMode === "primary-bulk"} label="Thay ảnh đại diện hàng loạt" onClick={() => setPublishMode("primary-bulk")} />
                 <ModeButton active={publishMode === "replace-all"} label="Thay toàn bộ một sản phẩm" onClick={() => setPublishMode("replace-all")} />
               </div>
 
-              {publishMode === "primary-bulk" ? (
+              {publishMode !== "replace-all" ? (
                 <div className="space-y-3">
+                  {publishMode === "filename-bulk" && (
+                    <div className="border border-gold-dark/20 bg-gold-dark/5 p-3 text-[10px] leading-relaxed text-gray-400">
+                      <span className="font-bold text-gold-light">QZJ004.png</span> là ảnh đại diện. <span className="font-bold text-gold-light">QZJ004-1.png, QZJ004-2.png...</span> là ảnh phụ và được sắp theo số hậu tố.
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-3 text-[10px] text-gray-500">
-                    <span>Tự ghép theo tên file trùng ID, SKU hoặc barcode.</span>
+                    <span>Tự ghép mã file với ID, SKU hoặc barcode; trường hợp mơ hồ cần chọn lại.</span>
                     <span>{Object.values(bulkProductTargets).filter(Boolean).length}/{products.length} đã ghép</span>
                   </div>
                   <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
@@ -1106,7 +1172,19 @@ export default function PromoOverlayPage(): React.ReactElement {
                         <div className="flex min-w-0 items-center gap-2">
                           <img src={item.url} alt="" className="h-10 w-10 shrink-0 object-contain" />
                           <div className="min-w-0">
-                            <div className="text-[10px] font-display font-bold uppercase tracking-wider text-white">Ảnh {index + 1}</div>
+                            <div className="flex items-center gap-2 text-[10px] font-display font-bold uppercase tracking-wider text-white">
+                              Ảnh {index + 1}
+                              {publishMode === "filename-bulk" && (
+                                <span className={classNames(
+                                  "px-1.5 py-0.5 text-[8px] tracking-wider",
+                                  getFileImagePosition(item.file.name).order === 0 ? "bg-gold-dark/20 text-gold-light" : "bg-white/5 text-gray-400",
+                                )}>
+                                  {getFileImagePosition(item.file.name).order === 0
+                                    ? "Đại diện"
+                                    : `Ảnh phụ ${getFileImagePosition(item.file.name).order}`}
+                                </span>
+                              )}
+                            </div>
                             <div className="truncate text-[10px] font-mono text-gray-500">{item.file.name}</div>
                           </div>
                         </div>

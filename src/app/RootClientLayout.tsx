@@ -16,6 +16,7 @@ export default function RootClientLayout({
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const isCatalogPage = pathname === '/catalog';
+  const isAdminPage = pathname === '/admin' || pathname?.startsWith('/admin/');
 
   useEffect(() => {
     setMounted(true);
@@ -42,7 +43,7 @@ export default function RootClientLayout({
         <main className="flex-1 w-full">
           {children}
         </main>
-        {!isCatalogPage && <Footer />}
+        {!isCatalogPage && !isAdminPage && <Footer />}
         <MobileQuickAccess />
         <ToastContainer />
       </div>
