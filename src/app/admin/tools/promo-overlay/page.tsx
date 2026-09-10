@@ -41,6 +41,7 @@ interface FilePickerWindow extends Window {
 }
 
 const PREVIEW_CANVAS_SIZE = 800;
+const PRODUCT_UPLOAD_WEBP_QUALITY = 0.7;
 
 function uid() {
   return Math.random().toString(36).slice(2, 9);
@@ -289,6 +290,8 @@ export default function PromoOverlayPage(): React.ReactElement {
       order: suffixMatch ? Number(suffixMatch[2]) : 0,
     };
   };
+
+  const getProductUploadFileName = (fileName: string) => `${fileName.replace(/\.[^/.]+$/, "") || "product"}.webp`;
 
   const findCatalogProductForFile = (fileName: string) => {
     const fileKey = normalizeProductMatchKey(getFileImagePosition(fileName).productName);
@@ -654,10 +657,9 @@ export default function PromoOverlayPage(): React.ReactElement {
     const blob = await canvasToBlob(
       generateExportCanvas(exportSize, product),
       "image/webp",
-      quality / 100,
+      PRODUCT_UPLOAD_WEBP_QUALITY,
     );
-    const baseName = product.file.name.replace(/\.[^/.]+$/, "") || "product";
-    return new File([blob], `${baseName}.webp`, { type: "image/webp" });
+    return new File([blob], getProductUploadFileName(product.file.name), { type: "image/webp" });
   };
 
   const publishImagesToProducts = async () => {
@@ -1209,7 +1211,7 @@ export default function PromoOverlayPage(): React.ReactElement {
                 Đăng ảnh vào sản phẩm
               </div>
               <p className="mb-4 text-[11px] leading-relaxed text-gray-500">
-                Đăng trực tiếp kết quả đang xem trước lên Cloudinary và cập nhật sản phẩm — không cần tải WebP về rồi thêm lại. Thumbnail bên dưới là đầu ra sau khi chỉnh nền, vị trí, tỷ lệ và overlay.
+                Đăng trực tiếp kết quả đang xem trước lên Cloudinary dưới dạng WebP 70% và cập nhật sản phẩm — không cần tải về rồi thêm lại. Thumbnail bên dưới là đầu ra sau khi chỉnh nền, vị trí, tỷ lệ và overlay.
               </p>
 
               <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1257,7 +1259,9 @@ export default function PromoOverlayPage(): React.ReactElement {
                                 </span>
                               )}
                             </div>
-                            <div className="truncate text-[10px] font-mono text-gray-500">{item.file.name}</div>
+                            <div className="truncate text-[10px] font-mono text-gray-500">
+                              {getProductUploadFileName(item.file.name)} · WebP 70%
+                            </div>
                           </div>
                         </div>
                         <select
