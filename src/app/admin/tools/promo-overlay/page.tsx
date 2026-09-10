@@ -121,6 +121,7 @@ export default function PromoOverlayPage(): React.ReactElement {
 
   const activeProduct = useMemo(() => products.find((item) => item.id === activeProductId) || products[0] || null, [activeProductId, products]);
   const activeProductIndex = activeProduct ? products.findIndex((item) => item.id === activeProduct.id) : -1;
+  const unmatchedProductCount = products.filter((item) => !bulkProductTargets[item.id]).length;
   const replaceAllProduct = useMemo(
     () => catalogProducts.find((item) => item.id === replaceAllProductId),
     [catalogProducts, replaceAllProductId],
@@ -848,6 +849,26 @@ export default function PromoOverlayPage(): React.ReactElement {
     });
   };
 
+  const removeUnmatchedProducts = () => {
+    const unmatchedIds = new Set(products.filter((item) => !bulkProductTargets[item.id]).map((item) => item.id));
+    if (!unmatchedIds.size) return;
+
+    setBulkProductTargets((current) => Object.fromEntries(
+      Object.entries(current).filter(([id]) => !unmatchedIds.has(id)),
+    ));
+    setProducts((current) => {
+      current.filter((item) => unmatchedIds.has(item.id)).forEach((item) => {
+        URL.revokeObjectURL(item.url);
+        productImgRefs.current.delete(item.id);
+      });
+      const next = current.filter((item) => !unmatchedIds.has(item.id));
+      setActiveProductId((activeId) => activeId && !unmatchedIds.has(activeId) ? activeId : next[0]?.id || null);
+      return next;
+    });
+    resetFileInput(productInputRef);
+    showToast(`Đã xóa ${unmatchedIds.size} ảnh chưa ghép mã. Các chỉnh sửa còn lại được giữ nguyên.`, "success");
+  };
+
   const clearProducts = () => {
     products.forEach((product) => URL.revokeObjectURL(product.url));
     productImgRefs.current.clear();
@@ -1231,9 +1252,21 @@ export default function PromoOverlayPage(): React.ReactElement {
                       Chỉ dùng file có hậu tố <span className="font-bold text-emerald-400">-1, -2...</span>. Ảnh phụ đúng vị trí sẽ được thay; ảnh đại diện và các ảnh phụ khác được giữ nguyên.
                     </div>
                   )}
-                  <div className="flex items-center justify-between gap-3 text-[10px] text-gray-500">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
                     <span>Tự ghép mã file với ID, SKU hoặc barcode; trường hợp mơ hồ cần chọn lại.</span>
-                    <span>{Object.values(bulkProductTargets).filter(Boolean).length}/{products.length} đã ghép</span>
+                    <div className="flex items-center gap-3">
+                      <span>{products.length - unmatchedProductCount}/{products.length} đã ghép</span>
+                      {unmatchedProductCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={removeUnmatchedProducts}
+                          className="inline-flex h-7 items-center gap-1 border border-red-500/25 px-2 text-[9px] font-display font-bold uppercase tracking-wider text-red-300 hover:border-red-400 hover:bg-red-500 hover:text-white"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Xóa ảnh chưa ghép ({unmatchedProductCount})
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                     {products.map((item, index) => (
@@ -1264,18 +1297,29 @@ export default function PromoOverlayPage(): React.ReactElement {
                             </div>
                           </div>
                         </div>
-                        <select
-                          value={bulkProductTargets[item.id] || ""}
-                          onChange={(event) => setBulkProductTargets((current) => ({ ...current, [item.id]: event.target.value }))}
-                          className="h-9 min-w-0 border border-white/10 bg-black px-2 text-[10px] text-white outline-none focus:border-gold-light"
-                        >
-                          <option value="">— Chọn sản phẩm đích —</option>
-                          {catalogProducts.map((product) => (
-                            <option key={product.id} value={product.id}>
-                              {product.name} ({product.sku || product.id})
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex min-w-0 gap-2">
+                          <select
+                            value={bulkProductTargets[item.id] || ""}
+                            onChange={(event) => setBulkProductTargets((current) => ({ ...current, [item.id]: event.target.value }))}
+                            className="h-9 min-w-0 flex-1 border border-white/10 bg-black px-2 text-[10px] text-white outline-none focus:border-gold-light"
+                          >
+                            <option value="">— Chọn sản phẩm đích —</option>
+                            {catalogProducts.map((product) => (
+                              <option key={product.id} value={product.id}>
+                                {product.name} ({product.sku || product.id})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => removeProduct(item.id)}
+                            className="inline-flex h-9 shrink-0 items-center justify-center gap-1 border border-red-500/20 px-2 text-[9px] font-display font-bold uppercase text-red-300 hover:border-red-400 hover:bg-red-500 hover:text-white"
+                            aria-label={`Xóa ${item.file.name} khỏi danh sách`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Xóa
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {!products.length && (
