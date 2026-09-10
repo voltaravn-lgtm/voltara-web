@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Download, Eraser, FileImage, ImagePlus, Loader2, Trash2, Upload, Wand2 } from "lucide-react";
+import { Download, Eraser, FileImage, FolderOpen, ImagePlus, Loader2, Trash2, Upload, Wand2 } from "lucide-react";
 
 type ResizeOption = "original" | 800 | 1200 | 1600 | 2000;
 
@@ -18,6 +18,24 @@ interface ImageItem {
   convertedSize?: number;
   converting?: boolean;
   error?: string;
+}
+
+interface WritableFileStreamLike {
+  write(data: Blob): Promise<void>;
+  close(): Promise<void>;
+}
+
+interface FileHandleLike {
+  createWritable(): Promise<WritableFileStreamLike>;
+}
+
+interface DirectoryHandleLike {
+  name: string;
+  getFileHandle(name: string, options: { create: true }): Promise<FileHandleLike>;
+}
+
+interface DirectoryPickerWindow extends Window {
+  showDirectoryPicker?: () => Promise<DirectoryHandleLike>;
 }
 
 function classNames(...items: Array<string | false | undefined>) {
@@ -41,6 +59,8 @@ export default function WebPConverterPage() {
   const [quality, setQuality] = useState<number>(82);
   const [resize, setResize] = useState<ResizeOption>("original");
   const [dragging, setDragging] = useState(false);
+  const [saveDirectoryHandle, setSaveDirectoryHandle] = useState<DirectoryHandleLike | null>(null);
+  const [saveDirectoryError, setSaveDirectoryError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const itemsRef = useRef<ImageItem[]>([]);
 
@@ -161,26 +181,75 @@ export default function WebPConverterPage() {
     }
   };
 
-  const downloadItem = (item: ImageItem) => {
-    if (!item.convertedUrl || !item.convertedBlob) return;
+  const getOutputFileName = (item: ImageItem) => `${item.name.replace(/\.[^/.]+$/, "")}.webp`;
+
+  const selectSaveDirectory = async () => {
+    const pickerWindow = window as DirectoryPickerWindow;
+    if (!pickerWindow.showDirectoryPicker) {
+      setSaveDirectoryError("Trình duyệt không hỗ trợ chọn thư mục. Hãy dùng Chrome, Edge hoặc Cốc Cốc phiên bản mới.");
+      return;
+    }
+
+    try {
+      const directory = await pickerWindow.showDirectoryPicker();
+      setSaveDirectoryHandle(directory);
+      setSaveDirectoryError("");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setSaveDirectoryError(error instanceof Error ? error.message : "Không thể mở cửa sổ chọn thư mục.");
+    }
+  };
+
+  const saveBlob = async (blob: Blob, item: ImageItem, directory = saveDirectoryHandle) => {
+    const fileName = getOutputFileName(item);
+    if (directory) {
+      const fileHandle = await directory.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    }
+
+    const url = item.convertedUrl || URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = item.convertedUrl;
-    a.download = `${item.name.replace(/\.[^/.]+$/, "")}.webp`;
+    a.href = url;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
+    if (!item.convertedUrl) URL.revokeObjectURL(url);
+  };
+
+  const downloadItem = async (item: ImageItem) => {
+    if (!item.convertedBlob) return;
+    try {
+      await saveBlob(item.convertedBlob, item);
+      setSaveDirectoryError("");
+    } catch (error) {
+      setSaveDirectoryError(error instanceof Error ? error.message : "Không thể lưu ảnh WebP.");
+    }
   };
 
   const downloadAll = async () => {
-    if (itemsRef.current.some((item) => !item.convertedBlob)) {
-      await convertAll();
-    }
-
-    for (const item of itemsRef.current) {
-      if (item.convertedUrl) {
-        downloadItem(item);
-        await new Promise((resolve) => setTimeout(resolve, 150));
+    try {
+      const readyItems: ImageItem[] = [];
+      for (const item of itemsRef.current) {
+        const readyItem = item.convertedBlob ? item : await convertItem(item);
+        readyItems.push(readyItem);
+        if (!item.convertedBlob) {
+          setItems((current) => current.map((entry) => entry.id === item.id ? readyItem : entry));
+        }
       }
+
+      for (const item of readyItems) {
+        if (item.convertedBlob) {
+          await saveBlob(item.convertedBlob, item, saveDirectoryHandle);
+          if (!saveDirectoryHandle) await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+      }
+      setSaveDirectoryError("");
+    } catch (error) {
+      setSaveDirectoryError(error instanceof Error ? error.message : "Không thể lưu tất cả ảnh WebP.");
     }
   };
 
@@ -305,6 +374,40 @@ export default function WebPConverterPage() {
                   <option value="2000">Tối đa 2000px</option>
                 </select>
               </label>
+
+              <div className="space-y-2">
+                <span className="block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Thư mục lưu</span>
+                <button
+                  type="button"
+                  onClick={selectSaveDirectory}
+                  className={classNames(
+                    "flex min-h-10 w-full items-center gap-3 border px-3 py-2 text-left transition-colors",
+                    saveDirectoryHandle
+                      ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300"
+                      : "border-white/10 bg-black text-gray-300 hover:border-gold-light hover:text-gold-light",
+                  )}
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-display font-bold uppercase tracking-wider">
+                      {saveDirectoryHandle ? "Thư mục đã chọn" : "Chọn thư mục lưu"}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[10px] font-mono opacity-70">
+                      {saveDirectoryHandle?.name || "Bấm để mở cửa sổ chọn thư mục"}
+                    </span>
+                  </span>
+                </button>
+                {saveDirectoryHandle && (
+                  <button
+                    type="button"
+                    onClick={() => setSaveDirectoryHandle(null)}
+                    className="text-[9px] font-display font-bold uppercase tracking-wider text-gray-500 hover:text-red-300"
+                  >
+                    Bỏ chọn thư mục, dùng tải xuống mặc định
+                  </button>
+                )}
+                {saveDirectoryError && <p className="text-[10px] leading-relaxed text-red-400">{saveDirectoryError}</p>}
+              </div>
 
               <div className="grid grid-cols-1 gap-2">
                 <ActionButton disabled={items.length === 0} onClick={convertAll} icon={<Wand2 className="h-4 w-4" />} label="Chuyển tất cả" />
