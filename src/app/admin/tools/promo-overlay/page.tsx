@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Download, Eraser, ImagePlus, Layers, Maximize2, Move, Palette, Save, Trash2, Upload } from "lucide-react";
+import { Calendar, Download, Eraser, ImagePlus, Layers, Loader2, Maximize2, Move, Palette, Save, Trash2, Upload } from "lucide-react";
 import { useApp } from "../../../../context/AppContext";
 import { isCloudinaryConfigured, uploadImageToCloudinary } from "../../../../lib/cloudinary";
 
 type ExportSize = "original" | 800 | 1000 | 1200;
 type BackgroundMode = "white" | "transparent" | "custom";
+type ProductPublishMode = "primary-bulk" | "replace-all";
 
 interface ImageAsset {
   file: File;
@@ -78,7 +79,13 @@ function getBaseName(fileName: string) {
 }
 
 export default function PromoOverlayPage(): React.ReactElement {
-  const { promoOverlaySettings, updatePromoOverlaySettings, showToast } = useApp();
+  const {
+    products: catalogProducts,
+    updateProduct,
+    promoOverlaySettings,
+    updatePromoOverlaySettings,
+    showToast,
+  } = useApp();
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<ImageAsset | null>(null);
@@ -95,6 +102,11 @@ export default function PromoOverlayPage(): React.ReactElement {
   const [exportBaseName, setExportBaseName] = useState("may-khoan-qzj005");
   const [preserveOriginalNames, setPreserveOriginalNames] = useState(false);
   const [saveDirectoryHandle, setSaveDirectoryHandle] = useState<DirectoryHandleLike | null>(null);
+  const [publishMode, setPublishMode] = useState<ProductPublishMode>("primary-bulk");
+  const [bulkProductTargets, setBulkProductTargets] = useState<Record<string, string>>({});
+  const [replaceAllProductId, setReplaceAllProductId] = useState("");
+  const [publishingProducts, setPublishingProducts] = useState(false);
+  const [publishProgress, setPublishProgress] = useState("");
   const dragState = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
 
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -250,6 +262,31 @@ export default function PromoOverlayPage(): React.ReactElement {
     };
   }, []);
 
+  const normalizeProductMatchKey = (value: string) => value
+    .replace(/\.[^/.]+$/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+
+  const findCatalogProductForFile = (fileName: string) => {
+    const fileKey = normalizeProductMatchKey(fileName);
+    if (!fileKey) return undefined;
+    const exactMatch = catalogProducts.find((product) =>
+      [product.id, product.sku, product.barcode].some((value) => value && normalizeProductMatchKey(value) === fileKey)
+    );
+    if (exactMatch || fileKey.length < 4) return exactMatch;
+
+    const prefixMatches = catalogProducts.filter((product) =>
+      [product.id, product.sku, product.barcode].some((value) => {
+        if (!value) return false;
+        const productKey = normalizeProductMatchKey(value);
+        return productKey.startsWith(fileKey) || fileKey.startsWith(productKey);
+      })
+    );
+    return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
+  };
+
   const onProductFiles = async (files: FileList | null) => {
     const selectedFiles = Array.from(files || []).filter((file) => /^image\/(png|jpeg|webp)$/.test(file.type));
     resetFileInput(productInputRef);
@@ -268,6 +305,14 @@ export default function PromoOverlayPage(): React.ReactElement {
 
       setProducts((current) => [...current, ...loadedProducts]);
       setActiveProductId((current) => current || loadedProducts[0]?.id || null);
+      setBulkProductTargets((current) => {
+        const next = { ...current };
+        loadedProducts.forEach((item) => {
+          const matchedProduct = findCatalogProductForFile(item.file.name);
+          if (matchedProduct) next[item.id] = matchedProduct.id;
+        });
+        return next;
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể thêm ảnh sản phẩm.";
       showToast(message, "error");
@@ -569,7 +614,102 @@ export default function PromoOverlayPage(): React.ReactElement {
     }
   };
 
+  const createProcessedWebpFile = async (product: ProductItem) => {
+    await ensureProductImage(product);
+    const blob = await canvasToBlob(
+      generateExportCanvas(exportSize, product),
+      "image/webp",
+      quality / 100,
+    );
+    const baseName = product.file.name.replace(/\.[^/.]+$/, "") || "product";
+    return new File([blob], `${baseName}.webp`, { type: "image/webp" });
+  };
+
+  const publishImagesToProducts = async () => {
+    if (!products.length) {
+      showToast("Chưa có ảnh đã xử lý để đăng.", "warning");
+      return;
+    }
+    if (!isCloudinaryConfigured()) {
+      showToast("Cloudinary chưa được cấu hình nên chưa thể đăng ảnh sản phẩm.", "error");
+      return;
+    }
+
+    if (publishMode === "primary-bulk") {
+      const missingTargets = products.filter((item) => !bulkProductTargets[item.id]);
+      if (missingTargets.length) {
+        showToast(`Còn ${missingTargets.length} ảnh chưa chọn sản phẩm đích.`, "warning");
+        return;
+      }
+      const selectedIds = products.map((item) => bulkProductTargets[item.id]);
+      if (new Set(selectedIds).size !== selectedIds.length) {
+        showToast("Mỗi sản phẩm chỉ được nhận một ảnh đại diện trong một lần đăng.", "warning");
+        return;
+      }
+      if (!window.confirm(`Thay ảnh đại diện cho ${products.length} sản phẩm? Ảnh đại diện cũ sẽ được gỡ khỏi dữ liệu sản phẩm.`)) return;
+    } else {
+      if (!replaceAllProductId) {
+        showToast("Chọn sản phẩm cần thay toàn bộ ảnh.", "warning");
+        return;
+      }
+      const target = catalogProducts.find((item) => item.id === replaceAllProductId);
+      if (!target) {
+        showToast("Không tìm thấy sản phẩm đã chọn.", "error");
+        return;
+      }
+      if (!window.confirm(`Thay toàn bộ ảnh của “${target.name}” bằng ${products.length} ảnh hiện tại? Ảnh số 1 sẽ là ảnh đại diện.`)) return;
+    }
+
+    setPublishingProducts(true);
+    setPublishProgress("Đang chuẩn bị ảnh...");
+    try {
+      const uploadedUrls: string[] = [];
+      for (let index = 0; index < products.length; index += 1) {
+        setPublishProgress(`Đang tải ảnh ${index + 1}/${products.length} lên Cloudinary...`);
+        const file = await createProcessedWebpFile(products[index]);
+        uploadedUrls.push(await uploadImageToCloudinary(file));
+      }
+
+      if (publishMode === "primary-bulk") {
+        for (let index = 0; index < products.length; index += 1) {
+          const target = catalogProducts.find((item) => item.id === bulkProductTargets[products[index].id]);
+          if (!target) throw new Error(`Không tìm thấy sản phẩm cho ảnh ${index + 1}.`);
+          setPublishProgress(`Đang cập nhật sản phẩm ${index + 1}/${products.length}...`);
+          const updated = await updateProduct({
+            ...target,
+            image: uploadedUrls[index],
+            images: (target.images || []).filter((url) => url !== target.image && url !== uploadedUrls[index]),
+          });
+          if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
+        }
+        showToast(`Đã thay ảnh đại diện cho ${products.length} sản phẩm.`, "success");
+      } else {
+        const target = catalogProducts.find((item) => item.id === replaceAllProductId);
+        if (!target) throw new Error("Không tìm thấy sản phẩm đã chọn.");
+        setPublishProgress("Đang cập nhật bộ ảnh sản phẩm...");
+        const updated = await updateProduct({
+          ...target,
+          image: uploadedUrls[0],
+          images: uploadedUrls.slice(1),
+        });
+        if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
+        showToast(`Đã thay toàn bộ ${uploadedUrls.length} ảnh của “${target.name}”.`, "success");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể đăng ảnh sản phẩm.";
+      showToast(message, "error");
+    } finally {
+      setPublishingProducts(false);
+      setPublishProgress("");
+    }
+  };
+
   const removeProduct = (id: string) => {
+    setBulkProductTargets((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
     setProducts((current) => {
       const removed = current.find((item) => item.id === id);
       if (removed) {
@@ -588,6 +728,7 @@ export default function PromoOverlayPage(): React.ReactElement {
     productImgRefs.current.clear();
     setProducts([]);
     setActiveProductId(null);
+    setBulkProductTargets({});
     resetFileInput(productInputRef);
   };
 
@@ -937,6 +1078,92 @@ export default function PromoOverlayPage(): React.ReactElement {
                   <ActionButton disabled={!products.length} onClick={() => downloadProducts("image/png", true)} icon={<Download className="h-4 w-4" />} label="Tải tất cả PNG" variant="outline" />
                 </div>
               )}
+            </div>
+
+            <div className="border border-gold-dark/30 bg-[#0B0B0B] p-4 sm:p-5">
+              <div className="mb-4 flex items-center gap-2 text-xs font-display font-bold uppercase tracking-widest text-gold-light">
+                <Upload className="h-4 w-4" />
+                Đăng ảnh vào sản phẩm
+              </div>
+              <p className="mb-4 text-[11px] leading-relaxed text-gray-500">
+                Đăng trực tiếp các ảnh đã ghép khung lên Cloudinary và cập nhật sản phẩm. Hãy kiểm tra sản phẩm đích trước khi xác nhận.
+              </p>
+
+              <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <ModeButton active={publishMode === "primary-bulk"} label="Thay ảnh đại diện hàng loạt" onClick={() => setPublishMode("primary-bulk")} />
+                <ModeButton active={publishMode === "replace-all"} label="Thay toàn bộ một sản phẩm" onClick={() => setPublishMode("replace-all")} />
+              </div>
+
+              {publishMode === "primary-bulk" ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 text-[10px] text-gray-500">
+                    <span>Tự ghép theo tên file trùng ID, SKU hoặc barcode.</span>
+                    <span>{Object.values(bulkProductTargets).filter(Boolean).length}/{products.length} đã ghép</span>
+                  </div>
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                    {products.map((item, index) => (
+                      <div key={item.id} className="grid grid-cols-1 gap-2 border border-white/5 bg-black/40 p-2 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] sm:items-center">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <img src={item.url} alt="" className="h-10 w-10 shrink-0 object-contain" />
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-display font-bold uppercase tracking-wider text-white">Ảnh {index + 1}</div>
+                            <div className="truncate text-[10px] font-mono text-gray-500">{item.file.name}</div>
+                          </div>
+                        </div>
+                        <select
+                          value={bulkProductTargets[item.id] || ""}
+                          onChange={(event) => setBulkProductTargets((current) => ({ ...current, [item.id]: event.target.value }))}
+                          className="h-9 min-w-0 border border-white/10 bg-black px-2 text-[10px] text-white outline-none focus:border-gold-light"
+                        >
+                          <option value="">— Chọn sản phẩm đích —</option>
+                          {catalogProducts.map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.name} ({product.sku || product.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                    {!products.length && (
+                      <div className="border border-dashed border-white/10 p-5 text-center text-[10px] text-gray-500">Chưa có ảnh để đăng.</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Sản phẩm cần thay toàn bộ ảnh</span>
+                    <select
+                      value={replaceAllProductId}
+                      onChange={(event) => setReplaceAllProductId(event.target.value)}
+                      className="h-10 w-full border border-white/10 bg-black px-3 text-xs text-white outline-none focus:border-gold-light"
+                    >
+                      <option value="">— Chọn một sản phẩm —</option>
+                      {catalogProducts.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name} ({product.sku || product.id})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="border border-gold-dark/20 bg-gold-dark/5 p-3 text-[11px] leading-relaxed text-gray-400">
+                    Toàn bộ ảnh cũ trong dữ liệu sản phẩm sẽ được thay thế. <span className="font-bold text-gold-light">Ảnh số 1</span> trong danh sách hiện tại sẽ là ảnh đại diện; các ảnh còn lại là ảnh bổ sung.
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={publishImagesToProducts}
+                disabled={publishingProducts || !products.length || !catalogProducts.length}
+                className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 bg-gradient-to-r from-gold-dark to-gold-light px-4 text-[11px] font-display font-black uppercase tracking-widest text-black disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {publishingProducts ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {publishingProducts ? publishProgress || "Đang đăng ảnh..." : "Kiểm tra và đăng ảnh"}
+              </button>
+              <p className="mt-2 text-[9px] leading-relaxed text-gray-600">
+                URL ảnh cũ được gỡ khỏi sản phẩm; file vật lý cũ trên Cloudinary không bị xóa tự động.
+              </p>
             </div>
 
             <div className="border border-gold-dark/20 bg-gold-dark/5 p-4 text-xs leading-relaxed text-gray-300">
