@@ -31,14 +31,11 @@ interface FileHandleLike {
 }
 
 interface DirectoryHandleLike {
+  name: string;
   getFileHandle(name: string, options: { create: true }): Promise<FileHandleLike>;
 }
 
 interface FilePickerWindow extends Window {
-  showSaveFilePicker?: (options: {
-    suggestedName: string;
-    types: Array<{ description: string; accept: Record<string, string[]> }>;
-  }) => Promise<FileHandleLike>;
   showDirectoryPicker?: () => Promise<DirectoryHandleLike>;
 }
 
@@ -97,7 +94,7 @@ export default function PromoOverlayPage(): React.ReactElement {
   const [customBackground, setCustomBackground] = useState("#ffffff");
   const [exportBaseName, setExportBaseName] = useState("may-khoan-qzj005");
   const [preserveOriginalNames, setPreserveOriginalNames] = useState(false);
-  const [chooseSaveLocation, setChooseSaveLocation] = useState(false);
+  const [saveDirectoryHandle, setSaveDirectoryHandle] = useState<DirectoryHandleLike | null>(null);
   const dragState = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
 
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -109,6 +106,7 @@ export default function PromoOverlayPage(): React.ReactElement {
   const overlayRef = useRef<ImageAsset | null>(null);
 
   const activeProduct = useMemo(() => products.find((item) => item.id === activeProductId) || products[0] || null, [activeProductId, products]);
+  const previewOverlayUrl = overlay?.url || promoOverlaySettings.imageUrl || "";
 
   useEffect(() => {
     setEventEnabled(promoOverlaySettings.enabled);
@@ -178,6 +176,9 @@ export default function PromoOverlayPage(): React.ReactElement {
     drawBackground(ctx, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE, true);
 
     if (!activeProduct) {
+      if (overlayImgRef.current) {
+        ctx.drawImage(overlayImgRef.current, 0, 0, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE);
+      }
       ctx.fillStyle = "#8A8A8A";
       ctx.font = "18px Inter, system-ui, Arial";
       ctx.textAlign = "center";
@@ -188,7 +189,7 @@ export default function PromoOverlayPage(): React.ReactElement {
     const cachedProduct = productImgRefs.current.get(activeProduct.id);
     if (cachedProduct) {
       drawProduct(ctx, activeProduct, cachedProduct, PREVIEW_CANVAS_SIZE);
-      if (overlay && overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE);
+      if (overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE);
       return;
     }
 
@@ -198,28 +199,41 @@ export default function PromoOverlayPage(): React.ReactElement {
       productImgRefs.current.set(activeProduct.id, img);
       drawBackground(ctx, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE, true);
       drawProduct(ctx, activeProduct, img, PREVIEW_CANVAS_SIZE);
-      if (overlay && overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE);
+      if (overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, PREVIEW_CANVAS_SIZE, PREVIEW_CANVAS_SIZE);
     };
   };
 
   useEffect(() => {
-    if (!overlay) {
-      overlayImgRef.current = null;
+    let cancelled = false;
+    overlayImgRef.current = null;
+
+    if (!previewOverlayUrl) {
       renderPreview();
-      return;
+      return undefined;
     }
 
     const img = new Image();
-    img.src = overlay.url;
+    if (/^https?:\/\//i.test(previewOverlayUrl)) img.crossOrigin = "anonymous";
     img.onload = () => {
+      if (cancelled) return;
       overlayImgRef.current = img;
       renderPreview();
     };
-  }, [overlay]);
+    img.onerror = () => {
+      if (cancelled) return;
+      overlayImgRef.current = null;
+      renderPreview();
+    };
+    img.src = previewOverlayUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewOverlayUrl]);
 
   useEffect(() => {
     renderPreview();
-  }, [activeProduct, overlay, backgroundMode, customBackground]);
+  }, [activeProduct, previewOverlayUrl, backgroundMode, customBackground]);
 
   useEffect(() => {
     productsRef.current = products;
@@ -446,7 +460,7 @@ export default function PromoOverlayPage(): React.ReactElement {
 
     const productImg = productImgRefs.current.get(product.id);
     if (productImg) drawProduct(ctx, product, productImg, width, height);
-    if (overlay && overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, width, height);
+    if (overlayImgRef.current) ctx.drawImage(overlayImgRef.current, 0, 0, width, height);
 
     return out;
   };
@@ -486,6 +500,24 @@ export default function PromoOverlayPage(): React.ReactElement {
     });
   };
 
+  const selectSaveDirectory = async () => {
+    const pickerWindow = window as FilePickerWindow;
+    if (!pickerWindow.showDirectoryPicker) {
+      showToast("Trình duyệt này không hỗ trợ chọn thư mục. Hãy dùng Chrome, Edge hoặc Cốc Cốc phiên bản mới.", "warning");
+      return;
+    }
+
+    try {
+      const directory = await pickerWindow.showDirectoryPicker();
+      setSaveDirectoryHandle(directory);
+      showToast(`Đã chọn thư mục: ${directory.name}`, "success");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      const message = error instanceof Error ? error.message : "Không thể mở cửa sổ chọn thư mục.";
+      showToast(message, "error");
+    }
+  };
+
   const downloadProducts = async (mime: "image/webp" | "image/png", all = false) => {
     const targets = all ? products : activeProduct ? [activeProduct] : [];
     if (!targets.length) return;
@@ -506,30 +538,7 @@ export default function PromoOverlayPage(): React.ReactElement {
       return `${originalBaseName}${occurrence > 1 ? `-${occurrence}` : ""}.${extension}`;
     });
 
-    const pickerWindow = window as FilePickerWindow;
-    let directoryHandle: DirectoryHandleLike | null = null;
-    let fileHandle: FileHandleLike | null = null;
-
-    if (chooseSaveLocation) {
-      try {
-        if (all && pickerWindow.showDirectoryPicker) {
-          directoryHandle = await pickerWindow.showDirectoryPicker();
-        } else if (targets.length === 1 && pickerWindow.showSaveFilePicker) {
-          fileHandle = await pickerWindow.showSaveFilePicker({
-            suggestedName: filenames[0],
-            types: [{
-              description: mime === "image/webp" ? "Ảnh WebP" : "Ảnh PNG",
-              accept: { [mime]: [`.${extension}`] },
-            }],
-          });
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        const message = error instanceof Error ? error.message : "Không thể mở nơi lưu file.";
-        showToast(message, "error");
-        return;
-      }
-    }
+    const directoryHandle = saveDirectoryHandle;
 
     try {
       await Promise.all(targets.map(ensureProductImage));
@@ -546,16 +555,12 @@ export default function PromoOverlayPage(): React.ReactElement {
           const writable = await targetFile.createWritable();
           await writable.write(blob);
           await writable.close();
-        } else if (fileHandle) {
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
         } else {
           downloadBlob(blob, filenames[index]);
         }
       }
 
-      if (directoryHandle || fileHandle) {
+      if (directoryHandle) {
         showToast(`Đã lưu ${targets.length} ảnh.`, "success");
       }
     } catch (error) {
@@ -633,7 +638,7 @@ export default function PromoOverlayPage(): React.ReactElement {
                 icon={<Layers className="h-5 w-5" />}
                 title="Khung overlay"
                 subtitle="PNG nền trong suốt"
-                fileName={overlay?.file.name}
+                fileName={overlay?.file.name || promoOverlaySettings.fileName}
                 buttonText="Chọn khung"
                 secondary
                 dropActive={overlayDropActive}
@@ -864,13 +869,20 @@ export default function PromoOverlayPage(): React.ReactElement {
                 <label className="flex cursor-pointer items-center gap-3 border border-white/10 bg-black px-3 py-3 text-[11px] text-gray-300">
                   <input
                     type="checkbox"
-                    checked={chooseSaveLocation}
-                    onChange={(e) => setChooseSaveLocation(e.target.checked)}
+                    checked={Boolean(saveDirectoryHandle)}
+                    onChange={(e) => {
+                      if (e.target.checked) void selectSaveDirectory();
+                      else setSaveDirectoryHandle(null);
+                    }}
                     className="h-4 w-4 accent-[#E3A62F]"
                   />
                   <span>
-                    <span className="block font-display font-bold uppercase tracking-wider text-white">Chọn nơi lưu</span>
-                    <span className="mt-1 block text-[10px] text-gray-500">Nhiều ảnh chỉ cần chọn thư mục một lần</span>
+                    <span className="block font-display font-bold uppercase tracking-wider text-white">
+                      {saveDirectoryHandle ? "Thư mục đã chọn" : "Chọn thư mục lưu"}
+                    </span>
+                    <span className="mt-1 block text-[10px] text-gray-500">
+                      {saveDirectoryHandle ? saveDirectoryHandle.name : "Bấm để mở cửa sổ chọn thư mục"}
+                    </span>
                   </span>
                 </label>
               </div>
