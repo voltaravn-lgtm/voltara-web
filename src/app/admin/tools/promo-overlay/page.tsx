@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Download, Eraser, ImagePlus, Layers, Loader2, Maximize2, Move, Palette, Save, Trash2, Upload } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Download, Eraser, ImagePlus, Layers, Loader2, Maximize2, Move, Palette, Save, Trash2, Upload } from "lucide-react";
 import { useApp } from "../../../../context/AppContext";
 import { isCloudinaryConfigured, uploadImageToCloudinary } from "../../../../lib/cloudinary";
 
@@ -119,6 +119,7 @@ export default function PromoOverlayPage(): React.ReactElement {
   const overlayRef = useRef<ImageAsset | null>(null);
 
   const activeProduct = useMemo(() => products.find((item) => item.id === activeProductId) || products[0] || null, [activeProductId, products]);
+  const activeProductIndex = activeProduct ? products.findIndex((item) => item.id === activeProduct.id) : -1;
   const replaceAllProduct = useMemo(
     () => catalogProducts.find((item) => item.id === replaceAllProductId),
     [catalogProducts, replaceAllProductId],
@@ -148,6 +149,12 @@ export default function PromoOverlayPage(): React.ReactElement {
   const updateActiveProduct = (changes: Partial<Pick<ProductItem, "scale" | "offset">>) => {
     if (!activeProduct) return;
     setProducts((current) => current.map((item) => (item.id === activeProduct.id ? { ...item, ...changes } : item)));
+  };
+
+  const selectAdjacentProduct = (direction: -1 | 1) => {
+    if (activeProductIndex < 0) return;
+    const nextProduct = products[activeProductIndex + direction];
+    if (nextProduct) setActiveProductId(nextProduct.id);
   };
 
   const resetFileInput = (inputRef: React.RefObject<HTMLInputElement | null>) => {
@@ -1202,7 +1209,7 @@ export default function PromoOverlayPage(): React.ReactElement {
                 Đăng ảnh vào sản phẩm
               </div>
               <p className="mb-4 text-[11px] leading-relaxed text-gray-500">
-                Đăng trực tiếp các ảnh đã ghép khung lên Cloudinary và cập nhật sản phẩm. Hãy kiểm tra sản phẩm đích trước khi xác nhận.
+                Đăng trực tiếp kết quả đang xem trước lên Cloudinary và cập nhật sản phẩm — không cần tải WebP về rồi thêm lại. Thumbnail bên dưới là đầu ra sau khi chỉnh nền, vị trí, tỷ lệ và overlay.
               </p>
 
               <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1230,7 +1237,12 @@ export default function PromoOverlayPage(): React.ReactElement {
                     {products.map((item, index) => (
                       <div key={item.id} className="grid grid-cols-1 gap-2 border border-white/5 bg-black/40 p-2 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] sm:items-center">
                         <div className="flex min-w-0 items-center gap-2">
-                          <img src={item.url} alt="" className="h-10 w-10 shrink-0 object-contain" />
+                          <ProcessedImageThumbnail
+                            product={item}
+                            overlayUrl={previewOverlayUrl}
+                            backgroundMode={backgroundMode}
+                            customBackground={customBackground}
+                          />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[10px] font-display font-bold uppercase tracking-wider text-white">
                               Ảnh {index + 1}
@@ -1366,9 +1378,30 @@ export default function PromoOverlayPage(): React.ReactElement {
                 </div>
                 {activeProduct && (
                   <span className="text-[10px] font-mono text-gray-500">
-                    Ảnh {products.findIndex((item) => item.id === activeProduct.id) + 1}/{products.length}
+                    Ảnh {activeProductIndex + 1}/{products.length}
                   </span>
                 )}
+              </div>
+
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => selectAdjacentProduct(-1)}
+                  disabled={activeProductIndex <= 0}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 border border-white/10 bg-black text-[10px] font-display font-bold uppercase tracking-widest text-gray-300 transition-colors hover:border-gold-light hover:text-gold-light disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Ảnh trước
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectAdjacentProduct(1)}
+                  disabled={activeProductIndex < 0 || activeProductIndex >= products.length - 1}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 border border-white/10 bg-black text-[10px] font-display font-bold uppercase tracking-widest text-gray-300 transition-colors hover:border-gold-light hover:text-gold-light disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  Ảnh tiếp
+                  <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
 
               <label className="mb-4 block">
@@ -1404,6 +1437,68 @@ export default function PromoOverlayPage(): React.ReactElement {
         </div>
       </div>
     </main>
+  );
+}
+
+function ProcessedImageThumbnail({ product, overlayUrl, backgroundMode, customBackground }: {
+  product: ProductItem;
+  overlayUrl: string;
+  backgroundMode: BackgroundMode;
+  customBackground: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return undefined;
+
+    const loadImage = (url: string) => new Promise<HTMLImageElement | null>((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
+      const image = new Image();
+      if (/^https?:\/\//i.test(url)) image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = url;
+    });
+
+    Promise.all([loadImage(product.url), loadImage(overlayUrl)]).then(([productImage, overlayImage]) => {
+      if (cancelled) return;
+      const size = canvas.width;
+      ctx.clearRect(0, 0, size, size);
+      if (backgroundMode !== "transparent") {
+        ctx.fillStyle = backgroundMode === "custom" ? customBackground : "#ffffff";
+        ctx.fillRect(0, 0, size, size);
+      }
+      if (productImage) {
+        const base = Math.min(size / product.width, size / product.height);
+        const displayScale = base * product.scale;
+        const drawWidth = product.width * displayScale;
+        const drawHeight = product.height * displayScale;
+        const x = (size - drawWidth) / 2 + product.offset.x * (size / PREVIEW_CANVAS_SIZE);
+        const y = (size - drawHeight) / 2 + product.offset.y * (size / PREVIEW_CANVAS_SIZE);
+        ctx.drawImage(productImage, x, y, drawWidth, drawHeight);
+      }
+      if (overlayImage) ctx.drawImage(overlayImage, 0, 0, size, size);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product, overlayUrl, backgroundMode, customBackground]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={96}
+      height={96}
+      className="h-10 w-10 shrink-0 border border-white/10 bg-[linear-gradient(45deg,#181818_25%,transparent_25%),linear-gradient(-45deg,#181818_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#181818_75%),linear-gradient(-45deg,transparent_75%,#181818_75%)] bg-[length:8px_8px] object-contain"
+      aria-label={`Ảnh đầu ra ${product.file.name}`}
+    />
   );
 }
 
