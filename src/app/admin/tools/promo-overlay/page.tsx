@@ -105,6 +105,7 @@ export default function PromoOverlayPage(): React.ReactElement {
   const [publishMode, setPublishMode] = useState<ProductPublishMode>("filename-bulk");
   const [bulkProductTargets, setBulkProductTargets] = useState<Record<string, string>>({});
   const [replaceAllProductId, setReplaceAllProductId] = useState("");
+  const [replaceAllProductQuery, setReplaceAllProductQuery] = useState("");
   const [publishingProducts, setPublishingProducts] = useState(false);
   const [publishProgress, setPublishProgress] = useState("");
   const dragState = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
@@ -118,6 +119,10 @@ export default function PromoOverlayPage(): React.ReactElement {
   const overlayRef = useRef<ImageAsset | null>(null);
 
   const activeProduct = useMemo(() => products.find((item) => item.id === activeProductId) || products[0] || null, [activeProductId, products]);
+  const replaceAllProduct = useMemo(
+    () => catalogProducts.find((item) => item.id === replaceAllProductId),
+    [catalogProducts, replaceAllProductId],
+  );
   const previewOverlayUrl = overlay?.url || promoOverlaySettings.imageUrl || "";
 
   useEffect(() => {
@@ -294,6 +299,20 @@ export default function PromoOverlayPage(): React.ReactElement {
       })
     );
     return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
+  };
+
+  const findCatalogProductByCode = (query: string) => {
+    const queryKey = normalizeProductMatchKey(query);
+    if (!queryKey) return undefined;
+    const matches = catalogProducts.filter((product) =>
+      [product.id, product.sku, product.barcode].some((value) => value && normalizeProductMatchKey(value) === queryKey)
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+
+  const updateReplaceAllProductQuery = (query: string) => {
+    setReplaceAllProductQuery(query);
+    setReplaceAllProductId(findCatalogProductByCode(query)?.id || "");
   };
 
   const onProductFiles = async (files: FileList | null) => {
@@ -645,8 +664,9 @@ export default function PromoOverlayPage(): React.ReactElement {
     }
 
     const filenameGroups = new Map<string, Array<{ index: number; order: number }>>();
+    const replaceAllEntries = products.map((item, index) => ({ index, order: getFileImagePosition(item.file.name).order }));
 
-    if (publishMode === "filename-bulk" || publishMode === "gallery-by-filename") {
+    if (publishMode !== "replace-all") {
       const missingTargets = products.filter((item) => !bulkProductTargets[item.id]);
       if (missingTargets.length) {
         showToast(`Còn ${missingTargets.length} ảnh chưa nhận diện được mã sản phẩm.`, "warning");
@@ -662,7 +682,7 @@ export default function PromoOverlayPage(): React.ReactElement {
 
       for (const [targetId, entries] of filenameGroups.entries()) {
         const primaryCount = entries.filter((entry) => entry.order === 0).length;
-        if (publishMode === "filename-bulk" && primaryCount !== 1) {
+        if (publishMode !== "gallery-by-filename" && primaryCount !== 1) {
           showToast("Mỗi mã sản phẩm phải có đúng một ảnh đại diện không chứa hậu tố -1, -2...", "warning");
           return;
         }
@@ -675,39 +695,35 @@ export default function PromoOverlayPage(): React.ReactElement {
           showToast("Một sản phẩm đang có ảnh trùng số thứ tự hậu tố.", "warning");
           return;
         }
-        if (publishMode === "gallery-by-filename") {
+        if (publishMode === "gallery-by-filename" || publishMode === "primary-bulk") {
           const target = catalogProducts.find((item) => item.id === targetId);
           if (!target) {
             showToast("Không tìm thấy một sản phẩm đã nhận diện.", "error");
             return;
           }
           let availableSlots = (target.images || []).length;
-          for (const order of [...orders].sort((a, b) => a - b)) {
+          for (const order of orders.filter((order) => order > 0).sort((a, b) => a - b)) {
             if (order > availableSlots + 1) {
               showToast(`Ảnh phụ -${order} của “${target.name}” tạo khoảng trống. Hãy bổ sung các số đứng trước.`, "warning");
               return;
             }
             if (order === availableSlots + 1) availableSlots += 1;
           }
+        } else {
+          const galleryOrders = orders.filter((order) => order > 0).sort((a, b) => a - b);
+          if (galleryOrders.some((order, index) => order !== index + 1)) {
+            showToast("Ảnh phụ phải được đánh số liên tiếp từ -1, -2... và không được bỏ khoảng trống.", "warning");
+            return;
+          }
         }
       }
 
-      const confirmation = publishMode === "filename-bulk"
-        ? `Đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm theo mã file? Ảnh không có hậu tố sẽ là ảnh đại diện.`
-        : `Cập nhật ${products.length} ảnh phụ cho ${filenameGroups.size} sản phẩm? Ảnh đại diện hiện tại sẽ được giữ nguyên.`;
+      const confirmation = publishMode === "gallery-by-filename"
+        ? `Cập nhật ${products.length} ảnh phụ cho ${filenameGroups.size} sản phẩm? Ảnh đại diện hiện tại sẽ được giữ nguyên.`
+        : publishMode === "primary-bulk"
+          ? `Thay ảnh đại diện cho ${filenameGroups.size} sản phẩm? File -1, -2... nếu có sẽ cập nhật đúng vị trí ảnh phụ.`
+          : `Đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm? File không hậu tố là ảnh đại diện; file -1, -2... là ảnh phụ.`;
       if (!window.confirm(confirmation)) return;
-    } else if (publishMode === "primary-bulk") {
-      const missingTargets = products.filter((item) => !bulkProductTargets[item.id]);
-      if (missingTargets.length) {
-        showToast(`Còn ${missingTargets.length} ảnh chưa chọn sản phẩm đích.`, "warning");
-        return;
-      }
-      const selectedIds = products.map((item) => bulkProductTargets[item.id]);
-      if (new Set(selectedIds).size !== selectedIds.length) {
-        showToast("Mỗi sản phẩm chỉ được nhận một ảnh đại diện trong một lần đăng.", "warning");
-        return;
-      }
-      if (!window.confirm(`Thay ảnh đại diện cho ${products.length} sản phẩm? Ảnh đại diện cũ sẽ được gỡ khỏi dữ liệu sản phẩm.`)) return;
     } else {
       if (!replaceAllProductId) {
         showToast("Chọn sản phẩm cần thay toàn bộ ảnh.", "warning");
@@ -718,7 +734,18 @@ export default function PromoOverlayPage(): React.ReactElement {
         showToast("Không tìm thấy sản phẩm đã chọn.", "error");
         return;
       }
-      if (!window.confirm(`Thay toàn bộ ảnh của “${target.name}” bằng ${products.length} ảnh hiện tại? Ảnh số 1 sẽ là ảnh đại diện.`)) return;
+      const primaryCount = replaceAllEntries.filter((entry) => entry.order === 0).length;
+      const orders = replaceAllEntries.map((entry) => entry.order);
+      if (primaryCount !== 1 || new Set(orders).size !== orders.length) {
+        showToast("Bộ ảnh phải có đúng một ảnh chính không hậu tố và không được trùng số -1, -2...", "warning");
+        return;
+      }
+      const galleryOrders = orders.filter((order) => order > 0).sort((a, b) => a - b);
+      if (galleryOrders.some((order, index) => order !== index + 1)) {
+        showToast("Ảnh phụ phải được đánh số liên tiếp từ -1, -2... và không được bỏ khoảng trống.", "warning");
+        return;
+      }
+      if (!window.confirm(`Thay toàn bộ ảnh của “${target.name}” bằng ${products.length} ảnh hiện tại? File không hậu tố sẽ là ảnh đại diện.`)) return;
     }
 
     setPublishingProducts(true);
@@ -731,7 +758,7 @@ export default function PromoOverlayPage(): React.ReactElement {
         uploadedUrls.push(await uploadImageToCloudinary(file));
       }
 
-      if (publishMode === "filename-bulk" || publishMode === "gallery-by-filename") {
+      if (publishMode !== "replace-all") {
         let updatedCount = 0;
         for (const [targetId, entries] of filenameGroups.entries()) {
           const target = catalogProducts.find((item) => item.id === targetId);
@@ -743,9 +770,9 @@ export default function PromoOverlayPage(): React.ReactElement {
               .sort((a, b) => a.order - b.order)
               .map((entry) => uploadedUrls[entry.index])
             : [...(target.images || [])];
-          if (publishMode === "filename-bulk" && !primary) throw new Error(`Sản phẩm “${target.name}” thiếu ảnh đại diện.`);
-          if (publishMode === "gallery-by-filename") {
-            entries.forEach((entry) => {
+          if (publishMode !== "gallery-by-filename" && !primary) throw new Error(`Sản phẩm “${target.name}” thiếu ảnh đại diện.`);
+          if (publishMode !== "filename-bulk") {
+            entries.filter((entry) => entry.order > 0).forEach((entry) => {
               galleryUrls[entry.order - 1] = uploadedUrls[entry.index];
             });
           }
@@ -759,32 +786,27 @@ export default function PromoOverlayPage(): React.ReactElement {
           if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
         }
         showToast(
-          publishMode === "filename-bulk"
-            ? `Đã đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm theo đúng mã file.`
-            : `Đã cập nhật ${products.length} ảnh phụ; ảnh đại diện được giữ nguyên.`,
+          publishMode === "gallery-by-filename"
+            ? `Đã cập nhật ${products.length} ảnh phụ; ảnh đại diện được giữ nguyên.`
+            : publishMode === "primary-bulk"
+              ? `Đã thay ảnh đại diện cho ${filenameGroups.size} sản phẩm; ảnh phụ được cập nhật theo hậu tố nếu có.`
+              : `Đã đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm theo đúng vai trò tên file.`,
           "success",
         );
-      } else if (publishMode === "primary-bulk") {
-        for (let index = 0; index < products.length; index += 1) {
-          const target = catalogProducts.find((item) => item.id === bulkProductTargets[products[index].id]);
-          if (!target) throw new Error(`Không tìm thấy sản phẩm cho ảnh ${index + 1}.`);
-          setPublishProgress(`Đang cập nhật sản phẩm ${index + 1}/${products.length}...`);
-          const updated = await updateProduct({
-            ...target,
-            image: uploadedUrls[index],
-            images: (target.images || []).filter((url) => url !== target.image && url !== uploadedUrls[index]),
-          });
-          if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
-        }
-        showToast(`Đã thay ảnh đại diện cho ${products.length} sản phẩm.`, "success");
       } else {
         const target = catalogProducts.find((item) => item.id === replaceAllProductId);
         if (!target) throw new Error("Không tìm thấy sản phẩm đã chọn.");
         setPublishProgress("Đang cập nhật bộ ảnh sản phẩm...");
+        const primary = replaceAllEntries.find((entry) => entry.order === 0);
+        if (!primary) throw new Error("Bộ ảnh thiếu ảnh đại diện không có hậu tố.");
+        const galleryUrls = replaceAllEntries
+          .filter((entry) => entry.order > 0)
+          .sort((a, b) => a.order - b.order)
+          .map((entry) => uploadedUrls[entry.index]);
         const updated = await updateProduct({
           ...target,
-          image: uploadedUrls[0],
-          images: uploadedUrls.slice(1),
+          image: uploadedUrls[primary.index],
+          images: galleryUrls,
         });
         if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
         showToast(`Đã thay toàn bộ ${uploadedUrls.length} ảnh của “${target.name}”.`, "success");
@@ -1192,11 +1214,9 @@ export default function PromoOverlayPage(): React.ReactElement {
 
               {publishMode !== "replace-all" ? (
                 <div className="space-y-3">
-                  {publishMode === "filename-bulk" && (
-                    <div className="border border-gold-dark/20 bg-gold-dark/5 p-3 text-[10px] leading-relaxed text-gray-400">
-                      <span className="font-bold text-gold-light">QZJ004.png</span> là ảnh đại diện. <span className="font-bold text-gold-light">QZJ004-1.png, QZJ004-2.png...</span> là ảnh phụ và được sắp theo số hậu tố.
-                    </div>
-                  )}
+                  <div className="border border-gold-dark/20 bg-gold-dark/5 p-3 text-[10px] leading-relaxed text-gray-400">
+                    <span className="font-bold text-gold-light">QZJ004.png</span> là ảnh đại diện. <span className="font-bold text-gold-light">QZJ004-1.png, QZJ004-2.png...</span> là ảnh phụ và được sắp theo số hậu tố.
+                  </div>
                   {publishMode === "gallery-by-filename" && (
                     <div className="border border-emerald-500/20 bg-emerald-500/5 p-3 text-[10px] leading-relaxed text-gray-400">
                       Chỉ dùng file có hậu tố <span className="font-bold text-emerald-400">-1, -2...</span>. Ảnh phụ đúng vị trí sẽ được thay; ảnh đại diện và các ảnh phụ khác được giữ nguyên.
@@ -1250,22 +1270,35 @@ export default function PromoOverlayPage(): React.ReactElement {
               ) : (
                 <div className="space-y-3">
                   <label className="block">
-                    <span className="mb-2 block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Sản phẩm cần thay toàn bộ ảnh</span>
-                    <select
-                      value={replaceAllProductId}
-                      onChange={(event) => setReplaceAllProductId(event.target.value)}
-                      className="h-10 w-full border border-white/10 bg-black px-3 text-xs text-white outline-none focus:border-gold-light"
-                    >
-                      <option value="">— Chọn một sản phẩm —</option>
-                      {catalogProducts.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} ({product.sku || product.id})
-                        </option>
-                      ))}
-                    </select>
+                    <span className="mb-2 block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">Gõ mã sản phẩm cần thay toàn bộ ảnh</span>
+                    <input
+                      type="text"
+                      list="replace-all-product-codes"
+                      value={replaceAllProductQuery}
+                      onChange={(event) => updateReplaceAllProductQuery(event.target.value)}
+                      placeholder="Nhập ID, SKU hoặc barcode..."
+                      autoComplete="off"
+                      className="h-10 w-full border border-white/10 bg-black px-3 text-xs font-mono text-white outline-none focus:border-gold-light"
+                    />
+                    <datalist id="replace-all-product-codes">
+                      {catalogProducts.flatMap((product) =>
+                        [product.id, product.sku, product.barcode]
+                          .filter((code): code is string => Boolean(code))
+                          .map((code) => <option key={`${product.id}-${code}`} value={code}>{product.name}</option>)
+                      )}
+                    </datalist>
                   </label>
+                  {replaceAllProduct ? (
+                    <div className="border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-300">
+                      Đã nhận diện: <span className="font-bold text-white">{replaceAllProduct.name}</span> ({replaceAllProduct.sku || replaceAllProduct.id})
+                    </div>
+                  ) : replaceAllProductQuery ? (
+                    <div className="border border-amber-500/20 bg-amber-500/5 p-3 text-[10px] text-amber-300">
+                      Chưa tìm thấy mã chính xác. Hãy chọn gợi ý hoặc kiểm tra lại ID/SKU/barcode.
+                    </div>
+                  ) : null}
                   <div className="border border-gold-dark/20 bg-gold-dark/5 p-3 text-[11px] leading-relaxed text-gray-400">
-                    Toàn bộ ảnh cũ trong dữ liệu sản phẩm sẽ được thay thế. <span className="font-bold text-gold-light">Ảnh số 1</span> trong danh sách hiện tại sẽ là ảnh đại diện; các ảnh còn lại là ảnh bổ sung.
+                    Toàn bộ ảnh cũ trong dữ liệu sản phẩm sẽ được thay thế. File <span className="font-bold text-gold-light">không có hậu tố</span> là ảnh đại diện; file <span className="font-bold text-gold-light">-1, -2...</span> là ảnh bổ sung.
                   </div>
                 </div>
               )}
