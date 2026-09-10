@@ -21,6 +21,27 @@ interface ProductItem extends ImageAsset {
   offset: { x: number; y: number };
 }
 
+interface WritableFileStreamLike {
+  write(data: Blob): Promise<void>;
+  close(): Promise<void>;
+}
+
+interface FileHandleLike {
+  createWritable(): Promise<WritableFileStreamLike>;
+}
+
+interface DirectoryHandleLike {
+  getFileHandle(name: string, options: { create: true }): Promise<FileHandleLike>;
+}
+
+interface FilePickerWindow extends Window {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<FileHandleLike>;
+  showDirectoryPicker?: () => Promise<DirectoryHandleLike>;
+}
+
 const PREVIEW_CANVAS_SIZE = 800;
 
 function uid() {
@@ -75,6 +96,8 @@ export default function PromoOverlayPage(): React.ReactElement {
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("white");
   const [customBackground, setCustomBackground] = useState("#ffffff");
   const [exportBaseName, setExportBaseName] = useState("may-khoan-qzj005");
+  const [preserveOriginalNames, setPreserveOriginalNames] = useState(false);
+  const [chooseSaveLocation, setChooseSaveLocation] = useState(false);
   const dragState = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
 
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -428,18 +451,24 @@ export default function PromoOverlayPage(): React.ReactElement {
     return out;
   };
 
-  const downloadCanvasAs = (canvas: HTMLCanvasElement, mime: string, qualityScalar: number | undefined, filename: string) => {
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }, mime, qualityScalar);
+  const canvasToBlob = (canvas: HTMLCanvasElement, mime: string, qualityScalar: number | undefined) => {
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Không thể tạo file ảnh để tải xuống."));
+      }, mime, qualityScalar);
+    });
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   const ensureProductImage = (product: ProductItem): Promise<HTMLImageElement> => {
@@ -458,26 +487,82 @@ export default function PromoOverlayPage(): React.ReactElement {
   };
 
   const downloadProducts = async (mime: "image/webp" | "image/png", all = false) => {
-  const targets = all ? products : activeProduct ? [activeProduct] : [];
-  if (!targets.length) return;
+    const targets = all ? products : activeProduct ? [activeProduct] : [];
+    if (!targets.length) return;
 
-  await Promise.all(targets.map(ensureProductImage));
+    const extension = mime === "image/webp" ? "webp" : "png";
+    const cleanBaseName = getBaseName(exportBaseName || activeProduct?.file.name || "promo");
+    const usedNames = new Map<string, number>();
+    const filenames = targets.map((product, index) => {
+      if (!preserveOriginalNames) {
+        const fileIndex = all || targets.length > 1 ? `-${index + 1}` : "";
+        return `${cleanBaseName}${fileIndex}.${extension}`;
+      }
 
-  const extension = mime === "image/webp" ? "webp" : "png";
-  const cleanBaseName = getBaseName(exportBaseName || activeProduct?.file.name || "promo");
+      const originalBaseName = product.file.name.replace(/\.[^/.]+$/, "") || "promo";
+      const collisionKey = originalBaseName.toLocaleLowerCase();
+      const occurrence = (usedNames.get(collisionKey) || 0) + 1;
+      usedNames.set(collisionKey, occurrence);
+      return `${originalBaseName}${occurrence > 1 ? `-${occurrence}` : ""}.${extension}`;
+    });
 
-  targets.forEach((product, index) => {
-    const fileIndex = all || targets.length > 1 ? `-${index + 1}` : "";
-    const filename = `${cleanBaseName}${fileIndex}.${extension}`;
+    const pickerWindow = window as FilePickerWindow;
+    let directoryHandle: DirectoryHandleLike | null = null;
+    let fileHandle: FileHandleLike | null = null;
 
-    downloadCanvasAs(
-      generateExportCanvas(exportSize, product),
-      mime,
-      mime === "image/webp" ? quality / 100 : undefined,
-      filename,
-    );
-  });
-};
+    if (chooseSaveLocation) {
+      try {
+        if (all && pickerWindow.showDirectoryPicker) {
+          directoryHandle = await pickerWindow.showDirectoryPicker();
+        } else if (targets.length === 1 && pickerWindow.showSaveFilePicker) {
+          fileHandle = await pickerWindow.showSaveFilePicker({
+            suggestedName: filenames[0],
+            types: [{
+              description: mime === "image/webp" ? "Ảnh WebP" : "Ảnh PNG",
+              accept: { [mime]: [`.${extension}`] },
+            }],
+          });
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        const message = error instanceof Error ? error.message : "Không thể mở nơi lưu file.";
+        showToast(message, "error");
+        return;
+      }
+    }
+
+    try {
+      await Promise.all(targets.map(ensureProductImage));
+
+      for (let index = 0; index < targets.length; index += 1) {
+        const blob = await canvasToBlob(
+          generateExportCanvas(exportSize, targets[index]),
+          mime,
+          mime === "image/webp" ? quality / 100 : undefined,
+        );
+
+        if (directoryHandle) {
+          const targetFile = await directoryHandle.getFileHandle(filenames[index], { create: true });
+          const writable = await targetFile.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } else if (fileHandle) {
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } else {
+          downloadBlob(blob, filenames[index]);
+        }
+      }
+
+      if (directoryHandle || fileHandle) {
+        showToast(`Đã lưu ${targets.length} ảnh.`, "success");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể xuất ảnh.";
+      showToast(message, "error");
+    }
+  };
 
   const removeProduct = (id: string) => {
     setProducts((current) => {
@@ -751,17 +836,44 @@ export default function PromoOverlayPage(): React.ReactElement {
               </div>
 
               <label className="space-y-2">
-  <span className="block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">
-    Tên file xuất
-  </span>
-  <input
-    type="text"
-    value={exportBaseName}
-    onChange={(e) => setExportBaseName(e.target.value)}
-    placeholder="may-khoan-qzj005"
-    className="h-10 w-full border border-white/10 bg-black px-3 text-xs font-mono text-white outline-none focus:border-gold-light"
-  />
-</label>
+                <span className="block text-[10px] font-display font-bold uppercase tracking-widest text-gray-400">
+                  Tên file xuất
+                </span>
+                <input
+                  type="text"
+                  value={exportBaseName}
+                  onChange={(e) => setExportBaseName(e.target.value)}
+                  placeholder="may-khoan-qzj005"
+                  className="h-10 w-full border border-white/10 bg-black px-3 text-xs font-mono text-white outline-none focus:border-gold-light"
+                />
+              </label>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center gap-3 border border-white/10 bg-black px-3 py-3 text-[11px] text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={preserveOriginalNames}
+                    onChange={(e) => setPreserveOriginalNames(e.target.checked)}
+                    className="h-4 w-4 accent-[#E3A62F]"
+                  />
+                  <span>
+                    <span className="block font-display font-bold uppercase tracking-wider text-white">Giữ tên file gốc</span>
+                    <span className="mt-1 block text-[10px] text-gray-500">Ví dụ: QZ004.png → QZ004.webp</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-3 border border-white/10 bg-black px-3 py-3 text-[11px] text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={chooseSaveLocation}
+                    onChange={(e) => setChooseSaveLocation(e.target.checked)}
+                    className="h-4 w-4 accent-[#E3A62F]"
+                  />
+                  <span>
+                    <span className="block font-display font-bold uppercase tracking-wider text-white">Chọn nơi lưu</span>
+                    <span className="mt-1 block text-[10px] text-gray-500">Nhiều ảnh chỉ cần chọn thư mục một lần</span>
+                  </span>
+                </label>
+              </div>
 
               <div className="mt-5 border-t border-white/5 pt-5">
                 <div className="mb-3 flex items-center gap-2 text-xs font-display font-bold uppercase tracking-widest text-gold-light">
