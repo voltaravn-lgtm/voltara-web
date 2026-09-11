@@ -374,6 +374,15 @@ export default function PromoOverlayPage(): React.ReactElement {
     .replace(/[^a-z0-9]/gi, "")
     .toLowerCase();
 
+  const normalizeProductBoundaryKey = (value: string) => value
+    .replace(/\.[^/.]+$/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+
   const findExactCatalogProducts = (value: string) => {
     const matchKey = normalizeProductMatchKey(value);
     if (!matchKey) return [];
@@ -397,7 +406,9 @@ export default function PromoOverlayPage(): React.ReactElement {
   const getProductUploadFileName = (fileName: string) => `${fileName.replace(/\.[^/.]+$/, "") || "product"}.webp`;
 
   const findCatalogProductForFile = (fileName: string) => {
-    const fileKey = normalizeProductMatchKey(getFileImagePosition(fileName).productName);
+    const productName = getFileImagePosition(fileName).productName;
+    const fileKey = normalizeProductMatchKey(productName);
+    const fileBoundaryKey = normalizeProductBoundaryKey(productName);
     if (!fileKey) return undefined;
     const exactMatches = findExactCatalogProducts(fileKey);
     if (exactMatches.length === 1 || fileKey.length < 4) return exactMatches[0];
@@ -406,11 +417,25 @@ export default function PromoOverlayPage(): React.ReactElement {
     const prefixMatches = catalogProducts.filter((product) =>
       [product.id, product.sku, product.barcode].some((value) => {
         if (!value) return false;
-        const productKey = normalizeProductMatchKey(value);
-        return Boolean(productKey) && (productKey.startsWith(fileKey) || fileKey.startsWith(productKey));
+        const productBoundaryKey = normalizeProductBoundaryKey(value);
+        return Boolean(productBoundaryKey) && (
+          productBoundaryKey.startsWith(`${fileBoundaryKey}-`) ||
+          fileBoundaryKey.startsWith(`${productBoundaryKey}-`)
+        );
       })
     );
     return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
+  };
+
+  const rematchAllProductTargets = () => {
+    const nextTargets: Record<string, string> = {};
+    products.forEach((item) => {
+      const matchedProduct = findCatalogProductForFile(item.file.name);
+      if (matchedProduct) nextTargets[item.id] = matchedProduct.id;
+    });
+    setBulkProductTargets(nextTargets);
+    const matchedCount = Object.keys(nextTargets).length;
+    showToast(`Đã nhận diện lại: ${matchedCount}/${products.length} ảnh khớp mã sản phẩm.`, matchedCount === products.length ? "success" : "warning");
   };
 
   const findCatalogProductByCode = (query: string) => {
@@ -1370,8 +1395,15 @@ export default function PromoOverlayPage(): React.ReactElement {
                   )}
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
                     <span>Tự ghép mã file với ID, SKU hoặc barcode; trường hợp mơ hồ cần chọn lại.</span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span>{products.length - unmatchedProductCount}/{products.length} đã ghép</span>
+                      <button
+                        type="button"
+                        onClick={rematchAllProductTargets}
+                        className="inline-flex h-7 items-center border border-gold-dark/30 px-2 text-[9px] font-display font-bold uppercase tracking-wider text-gold-light hover:border-gold-light hover:bg-gold-dark/10"
+                      >
+                        Nhận diện lại
+                      </button>
                       {unmatchedProductCount > 0 && (
                         <button
                           type="button"
@@ -1397,7 +1429,7 @@ export default function PromoOverlayPage(): React.ReactElement {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[10px] font-display font-bold uppercase tracking-wider text-white">
                               Ảnh {index + 1}
-                              {(publishMode === "filename-bulk" || publishMode === "gallery-by-filename") && (
+                              {(
                                 <span className={classNames(
                                   "px-1.5 py-0.5 text-[8px] tracking-wider",
                                   getFileImagePosition(item.file.name).order === 0 ? "bg-gold-dark/20 text-gold-light" : "bg-white/5 text-gray-400",
