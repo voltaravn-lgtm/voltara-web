@@ -79,6 +79,97 @@ function getBaseName(fileName: string) {
   ) || "promo";
 }
 
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? 0xEDB88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function getCrc32(bytes: Uint8Array) {
+  let crc = 0xFFFFFFFF;
+  for (const byte of bytes) crc = CRC32_TABLE[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function getZipDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  return {
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1),
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+  };
+}
+
+async function createZipArchive(files: Array<{ name: string; blob: Blob }>) {
+  const encoder = new TextEncoder();
+  const localParts: BlobPart[] = [];
+  const centralParts: BlobPart[] = [];
+  const { time, date } = getZipDateTime();
+  let localOffset = 0;
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const data = new Uint8Array(await file.blob.arrayBuffer());
+    const crc = getCrc32(data);
+    const localHeader = new Uint8Array(30);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034B50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, time, true);
+    localView.setUint16(12, date, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.byteLength, true);
+    localView.setUint32(22, data.byteLength, true);
+    localView.setUint16(26, nameBytes.byteLength, true);
+    localView.setUint16(28, 0, true);
+
+    const centralHeader = new Uint8Array(46);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014B50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, time, true);
+    centralView.setUint16(14, date, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.byteLength, true);
+    centralView.setUint32(24, data.byteLength, true);
+    centralView.setUint16(28, nameBytes.byteLength, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, localOffset, true);
+
+    localParts.push(localHeader as BlobPart, nameBytes as BlobPart, data as BlobPart);
+    centralParts.push(centralHeader as BlobPart, nameBytes as BlobPart);
+    localOffset += localHeader.byteLength + nameBytes.byteLength + data.byteLength;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + (part as Uint8Array).byteLength, 0);
+  const endHeader = new Uint8Array(22);
+  const endView = new DataView(endHeader.buffer);
+  endView.setUint32(0, 0x06054B50, true);
+  endView.setUint16(4, 0, true);
+  endView.setUint16(6, 0, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, localOffset, true);
+  endView.setUint16(20, 0, true);
+
+  return new Blob([...localParts, ...centralParts, endHeader as BlobPart], { type: "application/zip" });
+}
+
 export default function PromoOverlayPage(): React.ReactElement {
   const {
     products: catalogProducts,
@@ -576,7 +667,7 @@ export default function PromoOverlayPage(): React.ReactElement {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   };
 
   const ensureProductImage = (product: ProductItem): Promise<HTMLImageElement> => {
@@ -636,6 +727,7 @@ export default function PromoOverlayPage(): React.ReactElement {
 
     try {
       await Promise.all(targets.map(ensureProductImage));
+      const exportedFiles: Array<{ name: string; blob: Blob }> = [];
 
       for (let index = 0; index < targets.length; index += 1) {
         const blob = await canvasToBlob(
@@ -649,6 +741,8 @@ export default function PromoOverlayPage(): React.ReactElement {
           const writable = await targetFile.createWritable();
           await writable.write(blob);
           await writable.close();
+        } else if (all) {
+          exportedFiles.push({ name: filenames[index], blob });
         } else {
           downloadBlob(blob, filenames[index]);
         }
@@ -656,6 +750,11 @@ export default function PromoOverlayPage(): React.ReactElement {
 
       if (directoryHandle) {
         showToast(`Đã lưu ${targets.length} ảnh.`, "success");
+      } else if (all) {
+        const zipBlob = await createZipArchive(exportedFiles);
+        const today = new Date().toISOString().slice(0, 10);
+        downloadBlob(zipBlob, `promo-overlay-${extension}-${today}.zip`);
+        showToast(`Đã đóng gói đủ ${exportedFiles.length} ảnh vào một file ZIP.`, "success");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể xuất ảnh.";
@@ -1237,8 +1336,8 @@ export default function PromoOverlayPage(): React.ReactElement {
               </div>
               {products.length > 1 && (
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <ActionButton disabled={!products.length} onClick={() => downloadProducts("image/webp", true)} icon={<Download className="h-4 w-4" />} label="Tải tất cả WebP" variant="outline" />
-                  <ActionButton disabled={!products.length} onClick={() => downloadProducts("image/png", true)} icon={<Download className="h-4 w-4" />} label="Tải tất cả PNG" variant="outline" />
+                  <ActionButton disabled={!products.length} onClick={() => downloadProducts("image/webp", true)} icon={<Download className="h-4 w-4" />} label={saveDirectoryHandle ? "Lưu tất cả WebP" : "Tải tất cả WebP (ZIP)"} variant="outline" />
+                  <ActionButton disabled={!products.length} onClick={() => downloadProducts("image/png", true)} icon={<Download className="h-4 w-4" />} label={saveDirectoryHandle ? "Lưu tất cả PNG" : "Tải tất cả PNG (ZIP)"} variant="outline" />
                 </div>
               )}
             </div>
