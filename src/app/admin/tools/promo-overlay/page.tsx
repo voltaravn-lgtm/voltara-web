@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight, Download, Eraser, ImagePlus, Layers, Loader2, Maximize2, Move, Palette, Save, Trash2, Upload } from "lucide-react";
 import { useApp } from "../../../../context/AppContext";
 import { isCloudinaryConfigured, uploadImageToCloudinary } from "../../../../lib/cloudinary";
+import { revalidateProductCache } from "../../../../lib/productCacheClient";
 
 type ExportSize = "original" | 800 | 1000 | 1200;
 type BackgroundMode = "white" | "transparent" | "custom";
@@ -843,6 +844,17 @@ export default function PromoOverlayPage(): React.ReactElement {
     return new File([blob], getProductUploadFileName(product.file.name), { type: "image/webp" });
   };
 
+  const finishProductPublishing = async (successMessage: string) => {
+    setPublishProgress("Đang làm mới ảnh trên website...");
+    const cacheRefreshed = await revalidateProductCache();
+    showToast(
+      cacheRefreshed
+        ? `${successMessage} Cache website đã được làm mới.`
+        : `${successMessage} Dữ liệu đã lưu nhưng chưa làm mới được cache; hãy tải lại website sau ít phút.`,
+      cacheRefreshed ? "success" : "warning",
+    );
+  };
+
   const publishImagesToProducts = async () => {
     if (!products.length) {
       showToast("Chưa có ảnh đã xử lý để đăng.", "warning");
@@ -982,13 +994,12 @@ export default function PromoOverlayPage(): React.ReactElement {
           });
           if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
         }
-        showToast(
+        await finishProductPublishing(
           publishMode === "gallery-by-filename"
             ? `Đã cập nhật ${products.length} ảnh phụ; ảnh đại diện được giữ nguyên.`
             : publishMode === "primary-bulk"
               ? `Đã thay ảnh đại diện cho ${filenameGroups.size} sản phẩm; ảnh phụ được cập nhật theo hậu tố nếu có.`
               : `Đã đăng ${products.length} ảnh cho ${filenameGroups.size} sản phẩm theo đúng vai trò tên file.`,
-          "success",
         );
       } else {
         const target = catalogProducts.find((item) => item.id === replaceAllProductId);
@@ -1006,7 +1017,7 @@ export default function PromoOverlayPage(): React.ReactElement {
           images: galleryUrls,
         });
         if (!updated) throw new Error(`Không thể cập nhật sản phẩm “${target.name}”.`);
-        showToast(`Đã thay toàn bộ ${uploadedUrls.length} ảnh của “${target.name}”.`, "success");
+        await finishProductPublishing(`Đã thay toàn bộ ${uploadedUrls.length} ảnh của “${target.name}”.`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể đăng ảnh sản phẩm.";
